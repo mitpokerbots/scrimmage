@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Application created!</h1>
+</div>
+
+<div class="alert alert-warning">
+  <strong>Warning!</strong> The secret key will only be shown once. Please store it in a safe space.
+</div>
+
+<table class="table table-striped">
+  <tr>
+    <th>Name</td>
+    <td>{{ application.name }}</td>
+  </tr>
+  <tr>
+    <th>Return URL</td>
+    <td>{{ application.return_url }}</td>
+  </tr>
+  <tr>
+    <th>Application ID</td>
+    <td><code>{{ application.id }}</code></td>
+  </tr>
+  <tr>
+    <th>Application Secret</td>
+    <td><code>{{ application.secret }}</code></td>
+  </tr>
+</table>
+
+<a href="{{ url_for('manage_index') }}" class="btn btn-primary">Continue</a>
+
+{% endblock %}
