@@ -93,3 +93,5 @@ ENV/
 dev.db
 todo.txt
 *.rdb
+
+.DS_Store

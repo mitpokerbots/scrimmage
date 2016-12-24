@@ -46,8 +46,8 @@ class GameRequest(db.Model):
   status = db.Column(db.Enum(GameRequestStatus), nullable=False)
   create_time = db.Column(db.DateTime, default=db.func.now())
 
-  challenger = db.relationship("Team")
-  opponent = db.relationship("Team")
+  challenger = db.relationship("Team", foreign_keys=challenger_id)
+  opponent = db.relationship("Team", foreign_keys=opponent_id)
 
   def __init__(self, challenger, opponent):
     self.challenger = challenger
@@ -81,10 +81,10 @@ class Game(db.Model):
   # TODO: Bot version
 
   game_request = db.relationship("GameRequest")
-  challenger = db.relationship("Team")
-  opponent = db.relationship("Team")
-  winner = db.relationship("Team")
-  loser = db.relationship("Team")
+  challenger = db.relationship("Team", foreign_keys=challenger_id)
+  opponent = db.relationship("Team", foreign_keys=opponent_id)
+  winner = db.relationship("Team", foreign_keys=winner_id)
+  loser = db.relationship("Team", foreign_keys=loser_id)
 
   def __init__(self, game_request):
     self.game_request = game_request

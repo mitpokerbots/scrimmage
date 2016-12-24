@@ -45,12 +45,12 @@ def login_return():
     return "Login was unsuccessful: " + err_msg, 400
 
   session['kerberos'] = request.args['email'][:-8]
-  session['name'] = request.args['name']
+  session['real_kerberos'] = session['kerberos']
   return redirect(request.args['next'] if 'next' in request.args else url_for('index'))
 
 
 @app.route('/logout')
 def logout():
   session.pop('kerberos', None)
-  session.pop('name', None)
+  session.pop('real_kerberos', None)
   return redirect(url_for('index'))

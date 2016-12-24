@@ -91,13 +91,17 @@
             <div class="nav-collapse collapse">
               <ul class="nav navbar-nav">
                 <li {% if request.endpoint == 'index' %}class="active"{% endif %}><a href="{{ url_for('index') }}">Home</a></li>
-                {% if is_admin %}
+                {% if g.is_admin %}
                   <li {% if request.endpoint == 'admin_index' %}class="active"{% endif %}><a href="{{ url_for('admin_index') }}">Admin</a></li>
                 {% endif %}
               </ul>
               <ul class="nav navbar-nav pull-right">
-                {% if session.kerberos %}
-                  <li><a href="{{ url_for('logout') }}">Log out {{ session.kerberos }}</a></li>
+                {% if g.is_logged_in %}
+                  <li><a href="{{ url_for('logout') }}">Log out {{ g.kerberos }}
+                    {% if g.kerberos != session['real_kerberos'] %}
+                      ({{ session['real_kerberos'] }})
+                    {% endif %}
+                  </a></li>
                 {% else %}
                   <li><a href="{{ url_for('login') }}">Log in</a></li>
                 {% endif %}

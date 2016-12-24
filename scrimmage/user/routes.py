@@ -1,12 +1,13 @@
-from flask import render_template
+from flask import render_template, g
 
 from scrimmage import app
-from scrimmage.user.helpers import login_required, logged_in
 
 @app.route('/')
 def index():
-  if not logged_in():
-    return render_template('index.html')
-  else:
-    return render_template('homepage.html')
+  if not g.is_logged_in:
+    return render_template('logged_out.html')
+  elif not g.team:
+    return render_template('no_team.html')
+
+  return render_template('homepage.html')
 

@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>Impersonate</h1>
+  </div>
+  <form class="form-horizontal" method="POST">
+    <div class="control-group">
+      <label class="control-label" for="inputKerberos">Kerberos of the person:</label>
+      <div class="controls">
+        <input type="text" id="inputKerberos" placeholder="(i.e. 'jserrino')" name='kerberos'>
+      </div>
+    </div>
+    <div class="control-group">
+      <div class="controls">
+        <button type="submit" class="btn">Impersonate</button>
+      </div>
+    </div>
+  </form>
+{% endblock %}
