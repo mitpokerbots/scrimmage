@@ -91,3 +91,5 @@ ENV/
 .ropeproject
 
 dev.db
+todo.txt
+*.rdb
