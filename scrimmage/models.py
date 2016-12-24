@@ -23,6 +23,8 @@ class Team(db.Model):
   wins = db.Column(db.Integer)
   losses = db.Column(db.Integer)
 
+  # TODO: Bot uploads, versions
+
   def __init__(self, name):
     self.name = name
     self.wins = 0
@@ -31,9 +33,9 @@ class Team(db.Model):
 
 
 class GameRequestStatus(enum.Enum):
-  challenged = 'challenged'     # Someone has been challenged to a game
-  game_spawned = 'game_created' # The game has been created, this request is completed
-  rejected = 'rejected'         # The game has been rejected, this request is completed
+  challenged = 'challenged'      # Someone has been challenged to a game
+  game_spawned = 'game_created'  # The game has been created, this request is completed
+  rejected = 'rejected'          # The game has been rejected, this request is completed
 
 
 class GameRequest(db.Model):
@@ -64,7 +66,7 @@ class GameStatus(enum.Enum):
 class Game(db.Model):
   __tablename__ = 'games'
   id = db.Column(db.Integer, primary_key=True)
-  game_request_id = db.Column(db.Integer, db.ForeignKey('game_requests.id'), nullable=False)
+  game_request_id = db.Column(db.Integer, db.ForeignKey('game_requests.id'), nullable=False, unique=True)
   challenger_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
   opponent_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
   challenger_elo = db.Column(db.Float)
@@ -74,6 +76,9 @@ class Game(db.Model):
 
   winner_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
   loser_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+
+  # TODO: Game logs
+  # TODO: Bot version
 
   game_request = db.relationship("GameRequest")
   challenger = db.relationship("Team")
