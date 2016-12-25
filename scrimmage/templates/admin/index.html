@@ -2,10 +2,12 @@
 
 {% block content %}
   <div class="page-header">
-    <h1>Wow ur on the admin page.</h1>
+    <h1>Admin: Home</h1>
   </div>
   <h2>Links</h2>
   <ul>
     <li><a href="{{ url_for('admin_impersonate') }}">Impersonate people</a></li>
+    <li><a href="{{ url_for('admin_teams') }}">Manage teams</a></li>
+    <li><a href="{{ url_for('admin_users') }}">Manage users</a></li>
   </ul>
 {% endblock %}
