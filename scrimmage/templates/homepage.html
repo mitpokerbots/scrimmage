@@ -4,7 +4,52 @@
   <div class="page-header">
     <h1>MIT Pokerbots Scrimmage Server</h1>
   </div>
-  <p>
-    Thanks for logging in. Nice team u got there.
-  </p>
+  <div class="row">
+    <div class="span6">
+      <h2>Team Standings</h2>
+      <table class="table table-hover table-condensed table-bordered">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>ELO</th>
+            <th>W/L</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for team in teams|sort(attribute='elo') %}
+            <tr{% if g.team == team %} class="info"{% endif %}>
+              <td>{{ team.name }}</td>
+              <td>{{ team.elo|round }}</td>
+              <td>{{ team.wins }}/{{ team.losses }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if g.team.can_challenge() and challengeable_teams|length > 0 %}
+        <form class="form-inline" action="{{ url_for('challenge') }}" method="POST">
+          <label for="team_select">Challenge:</label>
+          <select name="team_id">
+            {% for team in challengeable_teams|sort(attribute='name') %}
+              <option value='{{ team.id }}'>
+                {{ team.name }}
+              </option>
+            {% endfor %}
+          </select>
+          <input type="submit" class="btn btn-default" value="Challenge!">
+        </form>
+      {% endif %}
+    </div>
+    <div class="span6">
+      <h2>Your Team: {{ g.team.name }}</h2>
+      <a href="{{ url_for('manage_team') }}">Manage your team</a>
+      <div>
+        <h3>Game Requests</h3>
+        Requests go here.
+      </div>
+      <div>
+        <h3>Recent Games</h3>
+        Recently played games.
+      </div>
+    </div>
+  </div>
 {% endblock %}

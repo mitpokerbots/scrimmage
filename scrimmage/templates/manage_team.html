@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>{{ g.team.name }}</h1>
+  </div>
+  <div class="row">
+    <div class="span6">
+      <h2>Manage</h2>
+      <div>
+        <h3>Status</h3>
+        <p>
+          {% if g.team.can_challenge() and g.team.can_be_challenged() %}
+            Your team is ready to play!
+          {% else %}
+            Your team is <strong>not</strong> ready to play. Please upload at least one bot and select your current bot on the right.
+          {% endif %}
+        </p>
+        <ul>
+          <li><strong>ELO</strong>: {{ g.team.elo|round }}</li>
+          <li><strong>Wins</strong>: {{ g.team.wins }}</li>
+          <li><strong>Losses</strong>: {{ g.team.losses }}</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Pending challenges</h3>
+        Pending challenges
+      </div>
+      <div>
+        <h3>Pending games</h3>
+        Games not yet played
+      </div>
+      <div>
+        <h3>Recent completed games</h3>
+        <p>
+          <a href="#">Click here to see the full list</a>
+        </p>
+        Completed games
+      </div>
+    </div>
+    <div class="span6">
+      <h2>Bots</h2>
+      <p>
+        Your current bot will be highlighted below.
+      </p>
+      <table class="table table-hover table-condensed table-bordered">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>W/L</th>
+            <th>Status</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bot in g.team.bots|sort(attribute='name') %}
+            <tr{% if g.team.current_bot == bot %} class="info"{% endif %}>
+              <td>{{ bot.name }}</td>
+              <td>{{ bot.wins }}/{{ bot.losses }}</td>
+              <td>{{ bot.friendly_status() }}</td>
+              <td>{{ bot.create_time }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan=4>You don't have any bots! Upload one below.
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if settable_bots|length > 0 %}
+        <h3>Select a bot</h3>
+        <form class="form-inline" action="{{ url_for('set_bot') }}" method="POST">
+          <label for="team_select">Set bot:</label>
+          <select name="bot_id">
+            {% for bot in settable_bots|sort(attribute='name') %}
+              <option value='{{ bot.id }}'>
+                {{ bot.name }}
+              </option>
+            {% endfor %}
+          </select>
+          <input type="submit" class="btn btn-default" value="Set bot">
+        </form>
+      {% endif %}
+      <h3>Upload a bot</h3>
+      <div>
+        <form class="form-horizontal" method="POST" action="{{ url_for('create_bot') }}">
+          <div class="control-group">
+            <label class="control-label" for="inputName">Bot name:</label>
+            <div class="controls">
+              <input type="text" id="inputName" placeholder="i.e. Good bot 2" name='name'>
+            </div>
+          </div>
+          <div class="control-group">
+            <div class="controls">
+              <button type="submit" class="btn">Upload</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}
