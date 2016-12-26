@@ -4,7 +4,8 @@ from scrimmage.models import AdminSetting
 
 DEFAULTS = {
   'recent_games_to_show': '15',
-  'challenges_enabled': 'false'
+  'challenges_enabled': 'false',
+  'extra_admins': ''
 }
 
 class SettingsClass(object):

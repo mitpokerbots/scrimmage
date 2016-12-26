@@ -7,6 +7,9 @@ from scrimmage.settings import settings
 
 ADMINS = set(['jserrino', 'sidds'])
 
+def is_admin(kerberos):
+  return kerberos in ADMINS or kerberos in [kerb.lower().trim() for kerb in settings['extra_admins'].split(',')]
+
 @app.before_request
 def set_up_g():
   """Sets up the following:
@@ -24,7 +27,7 @@ def set_up_g():
     return
   g.is_logged_in = True
   g.kerberos = session['kerberos']
-  g.is_admin = session['real_kerberos'] in ADMINS
+  g.is_admin = is_admin(session['real_kerberos'])
   user = User.query.filter(User.kerberos == g.kerberos).one_or_none()
   if user is not None:
     g.team = user.team
