@@ -31,20 +31,26 @@
           {% endfor %}
         </tbody>
       </table>
-      {% if g.team.can_challenge() and challengeable_teams|length > 0 %}
-        <form class="form-inline" action="{{ url_for('challenge') }}" method="POST">
-          <label for="team_select">Challenge:</label>
-          <select name="team_id">
-            {% for team in challengeable_teams|sort(attribute='name') %}
-              <option value='{{ team.id }}'>
-                {{ team.name }}
-              </option>
-            {% endfor %}
-          </select>
-          <input type="submit" class="btn btn-default" value="Challenge!">
-        </form>
+      {% if g.settings['challenges_enabled'].lower() == 'true' %}
+        {% if g.team.can_challenge() and challengeable_teams|length > 0 %}
+          <form class="form-inline" action="{{ url_for('challenge') }}" method="POST">
+            <label for="team_select">Challenge:</label>
+            <select name="team_id">
+              {% for team in challengeable_teams|sort(attribute='name') %}
+                <option value='{{ team.id }}'>
+                  {{ team.name }}
+                </option>
+              {% endfor %}
+            </select>
+            <input type="submit" class="btn btn-default" value="Challenge!">
+          </form>
+          <p>
+            Challenges for people of higher ELO will automatically be accepted.
+          </p>
+        {% endif %}
+      {% else %}
         <p>
-          Challenges for people of higher ELO will automatically be accepted.
+          Challenges are currently disabled. Upload a bot so you can play immediately when they are enabled.
         </p>
       {% endif %}
     </div>

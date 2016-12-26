@@ -6,7 +6,8 @@ from scrimmage.decorators import team_required, set_flash
 
 @app.route('/')
 def index():
-  recent_games = Game.query.order_by(Game.create_time.desc()).limit(10).all()
+  games_to_show = int(g.settings['recent_games_to_show'])
+  recent_games = Game.query.order_by(Game.create_time.desc()).limit(games_to_show).all()
   if not g.is_logged_in:
     return render_template('logged_out.html', message="Please log in to continue", recent_games=recent_games)
   elif not g.team:
@@ -25,6 +26,7 @@ def index():
 def challenge():
   team_id = int(request.form['team_id'])
   team = Team.query.get(team_id)
+  assert g.settings['challenges_enabled'].lower() == 'true'
   assert g.team.can_challenge()
   assert team.can_be_challenged()
 

@@ -2,6 +2,17 @@ import enum, datetime
 
 from scrimmage import app, db
 
+class AdminSetting(db.Model):
+  __tablename__ = 'settings'
+  id = db.Column(db.Integer, primary_key=True)
+  key = db.Column(db.String(128), unique=True, index=True)
+  value = db.Column(db.String(128), unique=True, index=True)
+
+  def __init__(self, key, value):
+    self.key = key
+    self.value = value
+
+
 class User(db.Model):
   __tablename__ = 'users'
   id = db.Column(db.Integer, primary_key=True)

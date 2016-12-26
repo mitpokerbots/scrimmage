@@ -3,6 +3,7 @@ from functools import wraps
 
 from scrimmage import app, db
 from scrimmage.models import User
+from scrimmage.settings import settings
 
 ADMINS = set(['jserrino', 'sidds'])
 
@@ -14,6 +15,7 @@ def set_up_g():
     g.kerberos
     g.team
   """
+  g.settings = settings
   g.is_logged_in = False
   g.is_admin = False
   g.team = None
