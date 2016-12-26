@@ -10,6 +10,12 @@
       {{ flash }}
     </div>
   {% endif %}
+  {% if g.team.is_disabled %}
+    <div class="alert alert-danger">
+      <button type="button" class="close" data-dismiss="alert">&times;</button>
+      Your team is currently disabled, and cannot challenge or receive new challenges.
+    </div>
+  {% endif %}
   <div class="row">
     <div class="span6">
       <h2>Team Standings</h2>
@@ -32,20 +38,30 @@
         </tbody>
       </table>
       {% if g.settings['challenges_enabled'].lower() == 'true' %}
-        {% if g.team.can_challenge() and challengeable_teams|length > 0 %}
-          <form class="form-inline" action="{{ url_for('challenge') }}" method="POST">
-            <label for="team_select">Challenge:</label>
-            <select name="team_id">
-              {% for team in challengeable_teams|sort(attribute='name') %}
-                <option value='{{ team.id }}'>
-                  {{ team.name }}
-                </option>
-              {% endfor %}
-            </select>
-            <input type="submit" class="btn btn-default" value="Challenge!">
-          </form>
+        {% if g.team.can_challenge() %}
+          {% if challengeable_teams|length > 0 %}
+            <form class="form-inline" action="{{ url_for('challenge') }}" method="POST">
+              <label for="team_select">Challenge:</label>
+              <select name="team_id">
+                {% for team in challengeable_teams|sort(attribute='name') %}
+                  <option value='{{ team.id }}'>
+                    {{ team.name }}
+                  </option>
+                {% endfor %}
+              </select>
+              <input type="submit" class="btn btn-default" value="Challenge!">
+            </form>
+            <p>
+              Challenges for people of higher ELO will automatically be accepted.
+            </p>
+          {% else %}
+            <p>
+              You're the only team who is ready to play! Please wait a bit for teams to upload their bots.
+            </p>
+          {% endif %}
+        {% else %}
           <p>
-            Challenges for people of higher ELO will automatically be accepted.
+            Your team has not uploaded and selected a bot! You must go to the team management page before you can challenge people.
           </p>
         {% endif %}
       {% else %}

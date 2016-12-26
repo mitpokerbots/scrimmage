@@ -26,3 +26,12 @@ def admin_team_delete(team_id):
   db.session.delete(team)
   db.session.commit()
   return redirect(url_for('admin_teams'))
+
+@app.route('/admin/team/<int:team_id>/modify', methods=['POST'])
+@admin_required
+def admin_team_modify(team_id):
+  team = Team.query.get(team_id)
+  team.is_disabled = (request.form['is_disabled'] == 'yes')
+  team.must_autoaccept = (request.form['must_autoaccept'] == 'yes')
+  db.session.commit()
+  return redirect(url_for('admin_teams'))

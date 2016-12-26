@@ -13,6 +13,7 @@
         <th>wins</th>
         <th>losses</th>
         <th>elo</th>
+        <th>modify</th>
         <th>delete</th>
       </tr>
     </thead>
@@ -25,6 +26,19 @@
           <td>{{ team.losses }}</td>
           <td>{{ team.elo }}</td>
           <td>
+            <form class="form-inline" action="{{ url_for('admin_team_modify', team_id=team.id) }}" method="POST">
+              <select name="is_disabled">
+                <option value="no" {% if not team.is_disabled %} selected {% endif %}>Enabled</option>
+                <option value="yes" {% if team.is_disabled %} selected {% endif %}>Disabled</option>
+              </select>
+              <select name="must_autoaccept">
+                <option value="no" {% if not team.must_autoaccept %} selected {% endif %}>Doesn't auto-accept</option>
+                <option value="yes" {% if team.must_autoaccept %} selected {% endif %}>Auto-accept</option>
+              </select>
+              <input type="submit" class="btn btn-warning" value="Modify">
+            </form>
+          </td>
+          <td>
             {% if team.can_be_deleted() %}
               <form class="form-inline" action="{{ url_for('admin_team_delete', team_id=team.id) }}" method="POST">
                 <input type="submit" class="btn btn-danger" value="Delete team">
@@ -32,7 +46,7 @@
             {% endif %}
           </td>
       {% else %}
-        <tr><td colspan=6>No teams yet, create one below</td></tr>
+        <tr><td colspan=7>No teams yet, create one below</td></tr>
       {% endfor %}
     </tbody>
     <tfoot>

@@ -84,6 +84,8 @@ class Team(db.Model):
   wins = db.Column(db.Integer)
   losses = db.Column(db.Integer)
   current_bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'))
+  is_disabled = db.Column(db.Boolean, default=False)
+  must_autoaccept = db.Column(db.Boolean, default=False)
 
   bots = db.relationship("Bot", back_populates="team", primaryjoin=(id == Bot.team_id))
   current_bot = db.relationship("Bot", foreign_keys=current_bot_id)
@@ -100,10 +102,10 @@ class Team(db.Model):
             len(self.bots) == 0)
 
   def can_challenge(self):
-    return self.current_bot is not None
+    return self.current_bot is not None and not self.is_disabled
 
   def can_be_challenged(self):
-    return self.current_bot is not None
+    return self.current_bot is not None and not self.is_disabled
 
   def set_current_bot(self, bot):
     assert bot.team == self
@@ -146,6 +148,9 @@ class GameRequest(db.Model):
     self.challenger = challenger
     self.opponent = opponent
     self.status = GameRequestStatus.challenged
+
+  def should_autoaccept(self):
+    return self.opponent.must_autoaccept or (self.opponent.elo > self.challenger.elo)
 
   def friendly_status(self):
     if self.status == GameRequestStatus.challenged:

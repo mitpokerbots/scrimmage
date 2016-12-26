@@ -12,7 +12,7 @@ def index():
     return render_template('logged_out.html', message="Please log in to continue", recent_games=recent_games)
   elif not g.team:
     return render_template('logged_out.html', message="Thanks for logging in. Unfortuantely, you do not have a team, so this page is hidden.", recent_games=recent_games)
-  teams = Team.query.all()
+  teams = Team.query.filter(Team.is_disabled == False).all()
   challengeable_teams = [team for team in teams if team != g.team and team.can_be_challenged()]
   return render_template('homepage.html',
                          teams=teams,
@@ -33,10 +33,10 @@ def challenge():
   g_request = GameRequest(g.team, team)
   db.session.add(g_request)
 
-  if team.elo > g.team.elo:
+  if g_request.should_autoaccept():
     game = g_request.accept()
     db.session.add(game)
-    set_flash("Challenged {}. Since they are higher ELO, the game is now in the queue".format(g_request.opponent.name))
+    set_flash("Challenged {}. The game is now in the queue".format(g_request.opponent.name))
     db.session.commit()
     game.spawn()
   else:
