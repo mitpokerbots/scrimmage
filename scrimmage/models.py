@@ -99,6 +99,18 @@ class Team(db.Model):
     assert bot.status == BotStatus.ready
     self.current_bot = bot
 
+  def pending_requests(self):
+    return (GameRequest.query.filter(GameRequest.opponent_id == self.id)
+                             .filter(GameRequest.status == GameRequestStatus.challenged)
+                             .order_by(GameRequest.create_time.desc())
+                             .all())
+
+  def outgoing_requests(self):
+    return (GameRequest.query.filter(GameRequest.challenger_id == self.id)
+                             .filter(GameRequest.status == GameRequestStatus.challenged)
+                             .order_by(GameRequest.create_time.desc())
+                             .all())
+
 
 class GameRequestStatus(enum.Enum):
   challenged = 'challenged'      # Someone has been challenged to a game

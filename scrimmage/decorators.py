@@ -28,6 +28,15 @@ def set_up_g():
     g.team = user.team
 
 
+@app.context_processor
+def flash():
+  return dict(flash=session.pop('flash', None))
+
+
+def set_flash(message):
+  session['flash'] = message
+
+
 def login_required(f):
   @wraps(f)
   def decorated_function(*args, **kwargs):

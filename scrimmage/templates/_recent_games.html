@@ -1,0 +1,37 @@
+<div class="row">
+  <div class="span12">
+    <h2>Recent Games</h2>
+    <table class="table table-bordered table-condensed">
+      <thead>
+        <tr>
+          <th>Challenger</th>
+          <th>Opponent</th>
+          <th>Time</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for game in recent_games %}
+          <tr>
+            <td>
+              {{ game.challenger.name }}
+              {% if game.challenger == game.winner %}
+                <span class="label label-success">Winner</span>
+              {% endif %}
+            </td>
+            <td>
+              {{ game.opponent.name }}
+              {% if game.opponent == game.winner %}
+                <span class="label label-success">Winner</span>
+              {% endif %}
+            </td>
+            <td>{{ game.create_time }}</td>
+            <td>{{ game.friendly_status() }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan=4>No games have been played yet! Check back in soon</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

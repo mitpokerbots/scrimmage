@@ -4,7 +4,10 @@
   <div class="page-header">
     <h1>MIT Pokerbots Scrimmage Server</h1>
   </div>
-  <p>
-    Please log in to continue
-  </p>
+  <div class="row">
+    <div class="span12">
+      {{ message }}
+    </div>
+  </div>
+  {% include '_recent_games.html' %}
 {% endblock %}

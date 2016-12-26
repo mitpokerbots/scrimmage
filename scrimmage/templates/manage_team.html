@@ -24,18 +24,28 @@
       </div>
       <div>
         <h3>Pending challenges</h3>
-        Pending challenges
-      </div>
-      <div>
-        <h3>Pending games</h3>
-        Games not yet played
-      </div>
-      <div>
-        <h3>Recent completed games</h3>
-        <p>
-          <a href="#">Click here to see the full list</a>
-        </p>
-        Completed games
+        <table class="table table-hover table-condensed table-bordered">
+          <thead>
+            <tr>
+              <th>Challenged Team</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for request in outgoing_requests %}
+              <tr>
+                <td>{{ request.opponent.name }}</td>
+                <td>{{ request.create_time }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan=2>
+                  Your requests to other people will appear here
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
     <div class="span6">

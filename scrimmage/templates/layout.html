@@ -91,6 +91,10 @@
             <div class="nav-collapse collapse">
               <ul class="nav navbar-nav">
                 <li {% if request.endpoint == 'index' %}class="active"{% endif %}><a href="{{ url_for('index') }}">Home</a></li>
+                {% if g.team %}
+                  <li {% if request.endpoint == 'manage_team' %}class="active"{% endif %}><a href="{{ url_for('manage_team') }}">Manage Team</a></li>
+                  <li {% if request.endpoint == 'show_games' %}class="active"{% endif %}><a href="{{ url_for('show_games') }}">Your Game Log</a></li>
+                {% endif %}
                 {% if g.is_admin %}
                   <li {% if request.endpoint == 'admin_index' %}class="active"{% endif %}><a href="{{ url_for('admin_index') }}">Admin</a></li>
                 {% endif %}

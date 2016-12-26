@@ -4,6 +4,12 @@
   <div class="page-header">
     <h1>MIT Pokerbots Scrimmage Server</h1>
   </div>
+  {% if flash %}
+    <div class="alert">
+      <button type="button" class="close" data-dismiss="alert">&times;</button>
+      {{ flash }}
+    </div>
+  {% endif %}
   <div class="row">
     <div class="span6">
       <h2>Team Standings</h2>
@@ -16,7 +22,7 @@
           </tr>
         </thead>
         <tbody>
-          {% for team in teams|sort(attribute='elo') %}
+          {% for team in teams|sort(attribute='elo', reverse=True) %}
             <tr{% if g.team == team %} class="info"{% endif %}>
               <td>{{ team.name }}</td>
               <td>{{ team.elo|round }}</td>
@@ -37,19 +43,53 @@
           </select>
           <input type="submit" class="btn btn-default" value="Challenge!">
         </form>
+        <p>
+          Challenges for people of higher ELO will automatically be accepted.
+        </p>
       {% endif %}
     </div>
     <div class="span6">
       <h2>Your Team: {{ g.team.name }}</h2>
-      <a href="{{ url_for('manage_team') }}">Manage your team</a>
       <div>
         <h3>Game Requests</h3>
-        Requests go here.
-      </div>
-      <div>
-        <h3>Recent Games</h3>
-        Recently played games.
+        <table class="table table-hover table-condensed table-bordered">
+          <thead>
+            <tr>
+              <th>Team</th>
+              <th>Time</th>
+              <th>Accept</th>
+              <th>Reject</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for request in pending_requests %}
+              <tr>
+                <td>{{ request.challenger.name }}</td>
+                <td>{{ request.create_time }}</td>
+                <td>
+                  <form style="margin: 0;" class="form-inline" action="{{ url_for('answer_request', request_id=request.id) }}", method="POST">
+                    <input type="hidden" name="action" value="accept" />
+                    <input type="submit" class="btn btn-mini btn-success" value="Accept">
+                  </form>
+                </td>
+                <td>
+                  <form style="margin: 0;" class="form-inline" action="{{ url_for('answer_request', request_id=request.id) }}", method="POST">
+                    <input type="hidden" name="action" value="reject" />
+                    <input type="submit" class="btn btn-mini btn-danger" value="Reject">
+                  </form>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan=4>
+                  When people of higher ELO challenge you, their requests will appear here.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
+  {% include '_recent_games.html' %}
 {% endblock %}
