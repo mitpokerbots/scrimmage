@@ -15,6 +15,7 @@ class ProductionConfig(Config):
   SERVER_NAME = 'pokerbots-scrimmage.mit.edu'
   PREFERRED_URL_SCHEME = 'https'
   S3_BUCKET = 'pokerbots-prod'
+  BROKER_URL = 'pyamqp://guest@localhost//'
 
 class DevConfig(Config):
   DEBUG = True
@@ -24,3 +25,4 @@ class DevConfig(Config):
   SERVER_NAME = 'localhost:5000'
   PREFERRED_URL_SCHEME = 'http'
   S3_BUCKET = 'pokerbots-dev'
+  BROKER_URL = 'pyamqp://guest@localhost//'

@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 from scrimmage import app, db
 from scrimmage.decorators import team_required
 from scrimmage.models import Bot, GameRequest, Game
+from scrimmage.tasks import compile
 
 @app.route('/team')
 @team_required
@@ -34,7 +35,6 @@ def create_bot():
     return ('', 204)
 
   name = secure_filename(name)
-
   key = os.path.join('bots', str(g.team.id), name)
   s3_client = boto3.client('s3')
   s3_client.put_object(Body=file, Bucket=app.config['S3_BUCKET'], Key=key)
@@ -42,7 +42,7 @@ def create_bot():
   new_bot = Bot(g.team, name)
   db.session.add(new_bot)
   db.session.commit()
-  new_bot.compile()
+  compile.delay(new_bot.id)
   return redirect(url_for('manage_team'))
 
 
