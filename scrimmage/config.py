@@ -6,6 +6,7 @@ class Config(object):
   SQLALCHEMY_DATABASE_URI = 'sqlite://:memory:'
   SQLALCHEMY_TRACK_MODIFICATIONS = False
   AUTH_URL_BASE = 'https://jserrino.scripts.mit.edu:444/auth/auth.php'
+  UPLOAD_FOLDER = 'uploads'
 
 class ProductionConfig(Config):
   SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI', None)
@@ -13,6 +14,7 @@ class ProductionConfig(Config):
   AUTH_KEY = os.getenv('AUTH_KEY', None)
   SERVER_NAME = 'pokerbots-scrimmage.mit.edu'
   PREFERRED_URL_SCHEME = 'https'
+  S3_BUCKET = 'pokerbots-prod'
 
 class DevConfig(Config):
   DEBUG = True
@@ -21,3 +23,4 @@ class DevConfig(Config):
   SECRET_KEY = 'SUPER SECRET KEY'
   SERVER_NAME = 'localhost:5000'
   PREFERRED_URL_SCHEME = 'http'
+  S3_BUCKET = 'pokerbots-dev'
