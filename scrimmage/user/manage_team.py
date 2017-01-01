@@ -1,13 +1,11 @@
 import os
-
 import boto3
+
 from flask import g, redirect, render_template, request, url_for
-from werkzeug.utils import secure_filename
 
 from scrimmage import app, db
 from scrimmage.decorators import team_required
 from scrimmage.models import Bot, GameRequest, Game
-from scrimmage.tasks import compile
 
 @app.route('/team')
 @team_required
@@ -29,20 +27,17 @@ def show_games():
 @app.route('/team/create_bot', methods=['POST'])
 @team_required
 def create_bot():
-  file = request.files['file']
+  fil = request.files['file']
   name = request.form['name']
-  if len(file.filename) == 0 or not name:
-    return ('', 204)
 
-  name = secure_filename(name)
-  key = os.path.join('bots', str(g.team.id), name)
+  key = os.path.join('uncompiled_bots', str(g.team.id), os.urandom(10).encode('hex'))
   s3_client = boto3.client('s3')
-  s3_client.put_object(Body=file, Bucket=app.config['S3_BUCKET'], Key=key)
+  s3_client.put_object(Body=fil, Bucket=app.config['S3_BUCKET'], Key=key)
 
-  new_bot = Bot(g.team, name)
+  new_bot = Bot(g.team, name, key)
   db.session.add(new_bot)
   db.session.commit()
-  compile.delay(new_bot.id)
+  new_bot.compile()
   return redirect(url_for('manage_team'))
 
 

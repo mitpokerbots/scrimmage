@@ -1,7 +1,7 @@
 from flask import render_template, request, session, redirect, url_for
 
 from scrimmage import app, db
-from scrimmage.decorators import admin_required
+from scrimmage.decorators import admin_required, set_flash
 from scrimmage.models import Team
 
 @app.route('/admin/teams', methods=['GET'])
@@ -34,4 +34,5 @@ def admin_team_modify(team_id):
   team.is_disabled = (request.form['is_disabled'] == 'yes')
   team.must_autoaccept = (request.form['must_autoaccept'] == 'yes')
   db.session.commit()
+  set_flash("Team has been modified.")
   return redirect(url_for('admin_teams'))

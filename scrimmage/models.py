@@ -26,10 +26,11 @@ class User(db.Model):
 
 
 class BotStatus(enum.Enum):
-  uploaded = 'uploaded'    # The bot is uploaded and a task has been created to compile
-  compiling = 'compiling'  # The bot is compiling
-  error = 'error'          # The bot's compilation errored
-  ready = 'ready'          # The bot is ready to be used.
+  uploaded = 'uploaded'              # The bot is uploaded and a task has been created to compile
+  compiling = 'compiling'            # The bot is compiling
+  compile_error = 'compile_error'    # The bot's compilation errored
+  internal_error = 'internal_error'  # Unable to compile the bot due to an internal error.
+  ready = 'ready'                    # The bot is ready to be used.
 
 
 class Bot(db.Model):
@@ -38,18 +39,19 @@ class Bot(db.Model):
   team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
   team = db.relationship("Team", foreign_keys=team_id, back_populates="bots")
   name = db.Column(db.String(128), nullable=False)
+  raw_s3_key = db.Column(db.String(256), nullable=False)
+  compiled_s3_key = db.Column(db.String(256))
   wins = db.Column(db.Integer)
   losses = db.Column(db.Integer)
   status = db.Column(db.Enum(BotStatus), nullable=False)
   create_time = db.Column(db.DateTime, default=db.func.now())
 
-  # TODO: Raw link
-  # TODO: Compiled link
   # TODO: Compile logs
 
-  def __init__(self, team, name):
+  def __init__(self, team, name, raw_s3_key):
     self.team = team
     self.name = name
+    self.raw_s3_key = raw_s3_key
     self.wins = 0
     self.losses = 0
     self.status = BotStatus.uploaded
@@ -62,17 +64,16 @@ class Bot(db.Model):
       return "Uploaded"
     if self.status == BotStatus.compiling:
       return "Compiling"
-    if self.status == BotStatus.error:
+    if self.status == BotStatus.compile_error:
       return "Compilation Error"
+    if self.status == BotStatus.internal_error:
+      return "Internal Error"
     if self.status == BotStatus.ready:
       return "Ready"
 
   def compile(self):
-    assert self.status == BotStatus.uploaded
-    # Don't actually do this, this is a placeholder
-    self.status = BotStatus.ready
-    db.session.commit()
-    # TODO: Spin off a task to compile the bot
+    from scrimmage.tasks import compile_bot_task
+    compile_bot_task.delay(self.id)
 
 
 class Team(db.Model):
@@ -171,10 +172,10 @@ class GameRequest(db.Model):
 
 
 class GameStatus(enum.Enum):
-  created = 'created'          # Game has been created, has not been spawned.
-  in_progress = 'in_progress'  # Game is currently being played
-  error = 'error'              # Game was unable to be played, due to an internal error
-  completed = 'completed'      # Game has been completed, there is a winner.
+  created = 'created'                # Game has been created, has not been spawned.
+  in_progress = 'in_progress'        # Game is currently being played
+  internal_error = 'internal_error'  # Game was unable to be played, due to an internal error
+  completed = 'completed'            # Game has been completed, there is a winner.
 
 K = 40
 
@@ -205,7 +206,7 @@ class Game(db.Model):
   winner_id = db.Column(db.Integer, db.ForeignKey('teams.id'))
   loser_id = db.Column(db.Integer, db.ForeignKey('teams.id'))
 
-  # TODO: Game logs
+  log_s3_key = db.Column(db.String(256))
 
   game_request = db.relationship("GameRequest")
   challenger = db.relationship("Team", foreign_keys=challenger_id)
@@ -233,21 +234,17 @@ class Game(db.Model):
       return "Queued"
     if self.status == GameStatus.in_progress:
       return "In Progress"
-    if self.status == GameStatus.error:
-      return "Errored"
+    if self.status == GameStatus.internal_error:
+      return "Internal error"
     if self.status == GameStatus.completed:
       return "Completed"
 
   def spawn(self):
     assert self.status == GameStatus.created
-    # Don't actually do this, this is a placeholder
-    self.status = GameStatus.in_progress
-    db.session.commit()
-    self.complete(bool(datetime.datetime.now().microsecond % 2))
-    db.session.commit()
-    # TODO: Actually spawn game
+    from scrimmage.tasks import play_game_task
+    play_game_task.delay(self.id)
 
-  def complete(self, challenger_won):
+  def complete(self, log_s3_key, challenger_won):
     assert self.status == GameStatus.in_progress
     if challenger_won:
       self.winner = self.challenger
@@ -267,3 +264,4 @@ class Game(db.Model):
 
     self.status = GameStatus.completed
     self.completed_time = datetime.datetime.now()
+    self.log_s3_key = log_s3_key

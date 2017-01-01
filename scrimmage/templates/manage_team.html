@@ -95,13 +95,14 @@
       {% endif %}
       <h3>Upload a bot</h3>
       <div>
-        <form class="form-horizontal" method="POST" action="{{ url_for('create_bot') }}" enctype = "multipart/form-data">
+        <form class="form-horizontal" method="POST" action="{{ url_for('create_bot') }}" enctype="multipart/form-data">
           <div class="control-group">
             <label class="control-label" for="inputName">Bot name:</label>
             <div class="controls">
               <input type="text" id="inputName" placeholder="i.e. Good bot 2" name='name'>
-              <input type="file" id="inputFile" name='file'>
+              <input type="file" id="inputFile" name='file' accept='application/zip'>
             </div>
+            <p>Upload your bot as a zip above (max 16 MB)</p>
           </div>
           <div class="control-group">
             <div class="controls">
