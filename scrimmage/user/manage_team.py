@@ -10,9 +10,8 @@ from scrimmage.models import Bot, GameRequest, Game
 @app.route('/team')
 @team_required
 def manage_team():
-  settable_bots = [bot for bot in g.team.bots if bot.is_settable()]
   outgoing_requests = g.team.outgoing_requests()
-  return render_template('manage_team.html', settable_bots=settable_bots, outgoing_requests=outgoing_requests)
+  return render_template('manage_team.html', outgoing_requests=outgoing_requests)
 
 
 @app.route('/team/games')
@@ -30,14 +29,16 @@ def create_bot():
   fil = request.files['file']
   name = request.form['name']
 
-  key = os.path.join('uncompiled_bots', str(g.team.id), os.urandom(10).encode('hex'))
+  if name == '' or name is None:
+    name = os.urandom(4).encode('hex')
+
+  key = os.path.join('bots', str(g.team.id), os.urandom(10).encode('hex'))
   s3_client = boto3.client('s3')
   s3_client.put_object(Body=fil, Bucket=app.config['S3_BUCKET'], Key=key)
 
   new_bot = Bot(g.team, name, key)
   db.session.add(new_bot)
   db.session.commit()
-  new_bot.compile()
   return redirect(url_for('manage_team'))
 
 

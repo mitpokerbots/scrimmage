@@ -60,17 +60,15 @@
             <th>W/L</th>
             <th>Status</th>
             <th>Created</th>
-            <th>Log</th>
           </tr>
         </thead>
         <tbody>
-          {% for bot in g.team.bots|sort(attribute='name') %}
+          {% for bot in g.team.bots|sort(attribute='create_time') %}
             <tr{% if g.team.current_bot == bot %} class="info"{% endif %}>
               <td>{{ bot.name }}</td>
               <td>{{ bot.wins }}/{{ bot.losses }}</td>
               <td>{{ bot.friendly_status() }}</td>
               <td>{{ bot.create_time }}</td>
-              <td>TODO</td>
             </tr>
           {% else %}
             <tr>
@@ -79,12 +77,12 @@
           {% endfor %}
         </tbody>
       </table>
-      {% if settable_bots|length > 0 %}
+      {% if g.team.bots|length > 0 %}
         <h3>Select a bot</h3>
         <form class="form-inline" action="{{ url_for('set_bot') }}" method="POST">
           <label for="team_select">Set bot:</label>
           <select name="bot_id">
-            {% for bot in settable_bots|sort(attribute='name') %}
+            {% for bot in g.team.bots|sort(attribute='create_time') %}
               <option value='{{ bot.id }}'>
                 {{ bot.name }}
               </option>
@@ -102,7 +100,7 @@
               <input type="text" id="inputName" placeholder="i.e. Good bot 2" name='name'>
               <input type="file" id="inputFile" name='file' accept='application/zip'>
             </div>
-            <p>Upload your bot as a zip above (max 16 MB)</p>
+            <p>Upload your bot as a zip above (max 5 MB compressed, 50 MB uncompressed)</p>
           </div>
           <div class="control-group">
             <div class="controls">

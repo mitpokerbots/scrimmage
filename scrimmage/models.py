@@ -25,55 +25,25 @@ class User(db.Model):
     self.team = team
 
 
-class BotStatus(enum.Enum):
-  uploaded = 'uploaded'              # The bot is uploaded and a task has been created to compile
-  compiling = 'compiling'            # The bot is compiling
-  compile_error = 'compile_error'    # The bot's compilation errored
-  internal_error = 'internal_error'  # Unable to compile the bot due to an internal error.
-  ready = 'ready'                    # The bot is ready to be used.
-
-
 class Bot(db.Model):
   __tablename__ = 'bots'
   id = db.Column(db.Integer, primary_key=True)
   team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
   team = db.relationship("Team", foreign_keys=team_id, back_populates="bots")
   name = db.Column(db.String(128), nullable=False)
-  raw_s3_key = db.Column(db.String(256), nullable=False)
-  compiled_s3_key = db.Column(db.String(256))
+  s3_key = db.Column(db.String(256), nullable=False)
   wins = db.Column(db.Integer)
   losses = db.Column(db.Integer)
-  status = db.Column(db.Enum(BotStatus), nullable=False)
   create_time = db.Column(db.DateTime, default=db.func.now())
 
   # TODO: Compile logs
 
-  def __init__(self, team, name, raw_s3_key):
+  def __init__(self, team, name, s3_key):
     self.team = team
     self.name = name
-    self.raw_s3_key = raw_s3_key
+    self.s3_key = s3_key
     self.wins = 0
     self.losses = 0
-    self.status = BotStatus.uploaded
-
-  def is_settable(self):
-    return self.status == BotStatus.ready
-
-  def friendly_status(self):
-    if self.status == BotStatus.uploaded:
-      return "Uploaded"
-    if self.status == BotStatus.compiling:
-      return "Compiling"
-    if self.status == BotStatus.compile_error:
-      return "Compilation Error"
-    if self.status == BotStatus.internal_error:
-      return "Internal Error"
-    if self.status == BotStatus.ready:
-      return "Ready"
-
-  def compile(self):
-    from scrimmage.tasks import compile_bot_task
-    compile_bot_task.delay(self.id)
 
 
 class Team(db.Model):

@@ -6,6 +6,7 @@ To run locally, do:
 
 `brew install rabbitmq`
 `pip install -r requirements.txt`
+`brew install scons`
 
 then do
 
