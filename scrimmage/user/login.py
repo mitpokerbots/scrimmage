@@ -12,7 +12,7 @@ def _verify_token(email, time, token):
   if abs(time.time() - int(time)) < 2:
     return False, "Token is too old."
   h = sha256()
-  h.update(email + time + app.config['SECRET_KEY'])
+  h.update(email + time + app.config['AUTH_KEY'])
   if h.hexdigest() != token:
     return False, "Token does not match."
   if email[-8:].lower() != '@mit.edu':
