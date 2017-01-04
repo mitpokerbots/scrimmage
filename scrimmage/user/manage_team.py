@@ -1,11 +1,11 @@
 import os
-import boto3
 
-from flask import g, redirect, render_template, request, url_for
+from flask import g, redirect, render_template, request, url_for, send_file
 
 from scrimmage import app, db
 from scrimmage.decorators import team_required
-from scrimmage.models import Bot, GameRequest, Game
+from scrimmage.models import Bot, GameRequest, Game, GameStatus
+from scrimmage.helpers import get_s3_object, put_s3_object
 
 @app.route('/team')
 @team_required
@@ -23,6 +23,15 @@ def show_games():
   return render_template('show_games.html', pagination=pagination)
 
 
+@app.route('/team/game/<int:game_id>/log')
+@team_required
+def game_log(game_id):
+  game = Game.query.get(game_id)
+  assert game.status == GameStatus.completed
+  assert game.opponent == g.team or game.challenger == g.team
+  return send_file(get_s3_object(game.log_s3_key), mimetype="text/plain")
+
+
 @app.route('/team/create_bot', methods=['POST'])
 @team_required
 def create_bot():
@@ -32,9 +41,8 @@ def create_bot():
   if name == '' or name is None:
     name = os.urandom(4).encode('hex')
 
-  key = os.path.join('bots', str(g.team.id), os.urandom(10).encode('hex'))
-  s3_client = boto3.client('s3')
-  s3_client.put_object(Body=fil, Bucket=app.config['S3_BUCKET'], Key=key)
+  key = os.path.join('bots', str(g.team.id), os.urandom(10).encode('hex') + '.zip')
+  put_s3_object(key, fil)
 
   new_bot = Bot(g.team, name, key)
   db.session.add(new_bot)

@@ -80,7 +80,6 @@ class Team(db.Model):
 
   def set_current_bot(self, bot):
     assert bot.team == self
-    assert bot.status == BotStatus.ready
     self.current_bot = bot
 
   def pending_requests(self):
@@ -147,17 +146,6 @@ class GameStatus(enum.Enum):
   internal_error = 'internal_error'  # Game was unable to be played, due to an internal error
   completed = 'completed'            # Game has been completed, there is a winner.
 
-K = 40
-
-def elo(winner, loser):
-  wr = 10**(winner/400.0)
-  lr = 10**(loser/400.0)
-
-  e_w = wr/(wr + lr)
-  e_l = lr/(wr + lr)
-
-  return (winner + (1.0 - e_w)*K, loser + (0.0 - e_l)*K)
-
 
 class Game(db.Model):
   __tablename__ = 'games'
@@ -213,25 +201,3 @@ class Game(db.Model):
     assert self.status == GameStatus.created
     from scrimmage.tasks import play_game_task
     play_game_task.delay(self.id)
-
-  def complete(self, log_s3_key, challenger_won):
-    assert self.status == GameStatus.in_progress
-    if challenger_won:
-      self.winner = self.challenger
-      self.loser = self.opponent
-      self.challenger_bot.wins += 1
-      self.opponent_bot.losses += 1
-    else:
-      self.winner = self.opponent
-      self.loser = self.challenger
-      self.opponent_bot.wins += 1
-      self.challenger_bot.losses += 1
-
-    self.winner.wins += 1
-    self.loser.losses += 1
-
-    self.winner.elo, self.loser.elo = elo(self.winner.elo, self.loser.elo)
-
-    self.status = GameStatus.completed
-    self.completed_time = datetime.datetime.now()
-    self.log_s3_key = log_s3_key

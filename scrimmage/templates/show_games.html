@@ -90,7 +90,13 @@
             {% endif %}
           </td>
           <td>{{ game.friendly_status() }}</td>
-          <td>Not yet available</td>
+          <td>
+            {% if game.status.value == 'completed' %}
+              <a href="{{ url_for('game_log', game_id=game.id) }}">Log</a>
+            {% else %}
+              Not yet available
+            {% endif %}
+          </td>
         </tr>
       {% else %}
         <tr><td colspan=9>Once you have played some games, they will show up here.</td></tr>

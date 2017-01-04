@@ -1,5 +1,7 @@
 import os
 
+# Note, it's very important that keys read from the environment have the same name as in the config
+
 class Config(object):
   DEBUG = False
   TESTING = False
@@ -8,14 +10,14 @@ class Config(object):
   AUTH_URL_BASE = 'https://jserrino.scripts.mit.edu:444/auth/auth.php'
   MAX_CONTENT_LENGTH = 5 * 1024 * 1024
 
-class ProductionConfig(Config):
+class ProdConfig(Config):
   SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI', None)
+  CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', None)
   SECRET_KEY = os.getenv('SECRET_KEY', None)
   AUTH_KEY = os.getenv('AUTH_KEY', None)
   SERVER_NAME = 'pokerbots-scrimmage.mit.edu'
   PREFERRED_URL_SCHEME = 'https'
   S3_BUCKET = 'pokerbots-prod'
-  BROKER_URL = 'pyamqp://guest@localhost//'
 
 class DevConfig(Config):
   DEBUG = True
@@ -25,4 +27,4 @@ class DevConfig(Config):
   SERVER_NAME = 'localhost:5000'
   PREFERRED_URL_SCHEME = 'http'
   S3_BUCKET = 'pokerbots-dev'
-  BROKER_URL = 'pyamqp://guest@localhost//'
+  CELERY_BROKER_URL = 'pyamqp://guest@localhost//'

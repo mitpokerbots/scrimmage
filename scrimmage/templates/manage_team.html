@@ -58,7 +58,6 @@
           <tr>
             <th>Name</th>
             <th>W/L</th>
-            <th>Status</th>
             <th>Created</th>
           </tr>
         </thead>
@@ -67,12 +66,11 @@
             <tr{% if g.team.current_bot == bot %} class="info"{% endif %}>
               <td>{{ bot.name }}</td>
               <td>{{ bot.wins }}/{{ bot.losses }}</td>
-              <td>{{ bot.friendly_status() }}</td>
               <td>{{ bot.create_time }}</td>
             </tr>
           {% else %}
             <tr>
-              <td colspan=4>You don't have any bots! Upload one below.
+              <td colspan=3>You don't have any bots! Upload one below.
             </tr>
           {% endfor %}
         </tbody>
