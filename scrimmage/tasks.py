@@ -155,7 +155,7 @@ def _play_game(game):
       return _finish_game(game, challenger, challenger_bot, opponent, opponent_bot, game_log, False)
 
     opponent_bot_path = _download_and_verify(opponent, opponent_bot, tmp_dir)
-    if not challenger_bot_path:
+    if not opponent_bot_path:
       game_log = "{} lost since the bot's zip was malformed\n".format(opponent_name)
       return _finish_game(game, challenger, challenger_bot, opponent, opponent_bot, game_log, True)
 
@@ -166,7 +166,9 @@ def _play_game(game):
     os.mkdir(game_dir)
 
     with open(os.path.join(game_dir, 'config.txt'), 'w') as config_file:
-      config_file.write(render_template('config.txt', challenger=challenger_dict, opponent=opponent_dict))
+      config_txt = render_template('config.txt', challenger=challenger_dict, opponent=opponent_dict)
+      print(config_txt)
+      config_file.write(config_txt)
 
     subprocess.check_call(['java', '-jar', ENGINE_PATH], cwd=game_dir, env=_get_environment())
 
