@@ -42,6 +42,10 @@ def _safe_name(name):
   return re.sub(r'[^a-z0-9_\-]', '-', name.lower())
 
 
+def _clean_dir(path):
+  subprocess.check_call(['scons', '--clean'], cwd=path, env=_get_environment())
+
+
 def _download_and_verify(player, bot, tmp_dir):
   try:
     bot_dir = os.path.join(tmp_dir, os.urandom(10).encode('hex'))
@@ -64,6 +68,7 @@ def _download_and_verify(player, bot, tmp_dir):
     for root, dirs, files in os.walk(bot_extract_dir):
       if 'SConstruct' in files:
         os.chmod(os.path.join(root, 'pokerbot.sh'), 0777)
+        _clean_dir(root)
         return root
 
     return False
