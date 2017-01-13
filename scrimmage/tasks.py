@@ -13,8 +13,7 @@ from scrimmage import celery_app, app, db
 from scrimmage.models import Bot, Game, GameStatus
 from scrimmage.helpers import get_s3_object, put_s3_object
 
-ENGINE_GIT_HASH = 'b9167c0365af603e7c13cf6aa05f304f628cbb0a'
-ENGINE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'deps', 'engine_{}.jar'.format(ENGINE_GIT_HASH)))
+ENGINE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'deps', 'engine.jar'))
 MAX_ZIP_SIZE = 50 * 1024 * 1024
 
 def render_template(tpl_path, **context):
