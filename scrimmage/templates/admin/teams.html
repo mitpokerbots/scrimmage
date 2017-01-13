@@ -5,7 +5,7 @@
     <h1>Admin: Teams list</h1>
   </div>
   {% if flash %}
-    <div class="alert">
+    <div class="alert alert-{{ flash_level }}">
       <button type="button" class="close" data-dismiss="alert">&times;</button>
       {{ flash }}
     </div>

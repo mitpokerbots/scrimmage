@@ -35,11 +35,12 @@ def set_up_g():
 
 @app.context_processor
 def flash():
-  return dict(flash=session.pop('flash', None))
+  return dict(flash=session.pop('flash', None), flash_level=session.pop('flash_level', None))
 
 
-def set_flash(message):
+def set_flash(message, level='info'):
   session['flash'] = message
+  session['flash_level'] = level
 
 
 def login_required(f):

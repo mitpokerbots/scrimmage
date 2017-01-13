@@ -34,13 +34,16 @@ def challenge():
   db.session.add(g_request)
 
   if g_request.should_autoaccept():
-    game = g_request.accept()
-    db.session.add(game)
-    set_flash("Challenged {}. The game is now in the queue".format(g_request.opponent.name))
-    db.session.commit()
-    game.spawn()
+    if g.team.can_initiate():
+      game = g_request.accept(was_automatic=True)
+      db.session.add(game)
+      set_flash("Challenged {}. The game is now in the queue".format(g_request.opponent.name), level='success')
+      db.session.commit()
+      game.spawn()
+    else:
+      set_flash("Game could not be spawned since you have too many games currently running. Please wait a little bit.", level='warning')
   else:
-    set_flash("Challenged {}. Since they are lower ELO, they must accept the request.".format(g_request.opponent.name))
+    set_flash("Challenged {}. Since they are lower ELO, they must accept the request.".format(g_request.opponent.name), level='success')
     db.session.commit()
 
   return redirect(url_for('index'))
@@ -56,11 +59,14 @@ def answer_request(request_id):
   if action == 'reject':
     g_request.reject()
     db.session.commit()
-    set_flash("Rejected {}'s game request.".format(g_request.challenger.name))
+    set_flash("Rejected {}'s game request.".format(g_request.challenger.name), level='success')
   elif action == 'accept':
-    game = g_request.accept()
-    db.session.add(game)
-    db.session.commit()
-    game.spawn()
-    set_flash("Accepted {}'s game request. It is now in the game queue.".format(g_request.challenger.name))
+    if g.team.can_initiate():
+      game = g_request.accept(was_automatic=False)
+      db.session.add(game)
+      db.session.commit()
+      game.spawn()
+      set_flash("Accepted {}'s game request. It is now in the game queue.".format(g_request.challenger.name), level='success')
+    else:
+      set_flash("Could not accept the game request, since you have too many games currently running. Please wait a little bit", level='warning')
   return redirect(url_for('index'))

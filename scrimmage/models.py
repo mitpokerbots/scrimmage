@@ -78,6 +78,11 @@ class Team(db.Model):
   def can_be_challenged(self):
     return self.current_bot is not None and not self.is_disabled
 
+  def can_initiate(self):
+    from scrimmage.settings import settings
+    num_games_outstanding = Game.query.filter(Game.initiator == self).filter(Game.status.in_([GameStatus.created, GameStatus.in_progress])).count()
+    return num_games_outstanding < int(settings['spawn_limit_per_team'])
+
   def set_current_bot(self, bot):
     assert bot.team == self
     self.current_bot = bot
@@ -134,10 +139,11 @@ class GameRequest(db.Model):
     assert self.status == GameRequestStatus.challenged
     self.status = GameRequestStatus.rejected
 
-  def accept(self):
+  def accept(self, was_automatic):
     assert self.status == GameRequestStatus.challenged
     self.status = GameRequestStatus.accepted
-    return Game(self)
+    initiator = self.challenger if was_automatic else self.opponent
+    return Game(self, initiator)
 
 
 class GameStatus(enum.Enum):
@@ -151,6 +157,7 @@ class Game(db.Model):
   __tablename__ = 'games'
   id = db.Column(db.Integer, primary_key=True)
   game_request_id = db.Column(db.Integer, db.ForeignKey('game_requests.id'), nullable=False, unique=True)
+  initiator_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
   challenger_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
   opponent_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
   challenger_elo = db.Column(db.Float) # Used just for statistics afterwards
@@ -167,6 +174,7 @@ class Game(db.Model):
   log_s3_key = db.Column(db.String(256))
 
   game_request = db.relationship("GameRequest")
+  initiator = db.relationship("Team", foreign_keys=initiator_id)
   challenger = db.relationship("Team", foreign_keys=challenger_id)
   opponent = db.relationship("Team", foreign_keys=opponent_id)
   challenger_bot = db.relationship("Bot", foreign_keys=challenger_bot_id)
@@ -174,8 +182,9 @@ class Game(db.Model):
   winner = db.relationship("Team", foreign_keys=winner_id)
   loser = db.relationship("Team", foreign_keys=loser_id)
 
-  def __init__(self, game_request):
+  def __init__(self, game_request, initiator):
     self.game_request = game_request
+    self.initiator = initiator
     self.challenger = game_request.challenger
     self.opponent = game_request.opponent
 
