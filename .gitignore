@@ -95,3 +95,6 @@ todo.txt
 *.rdb
 
 .DS_Store
+
+start_worker.sh
+start_server.sh
