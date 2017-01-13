@@ -15,7 +15,7 @@ class ProdConfig(Config):
   CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', None)
   SECRET_KEY = os.getenv('SECRET_KEY', None)
   AUTH_KEY = os.getenv('AUTH_KEY', None)
-  SERVER_NAME = 'pokerbots-scrimmage.mit.edu'
+  SERVER_NAME = 'scrimmage.mitpokerbots.com'
   PREFERRED_URL_SCHEME = 'https'
   S3_BUCKET = 'pokerbots-prod'
 
