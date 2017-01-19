@@ -8,7 +8,7 @@ class Config(object):
   SQLALCHEMY_DATABASE_URI = 'sqlite://:memory:'
   SQLALCHEMY_TRACK_MODIFICATIONS = False
   AUTH_URL_BASE = 'https://jserrino.scripts.mit.edu:444/auth/auth.php'
-  MAX_CONTENT_LENGTH = 5 * 1024 * 1024
+  MAX_CONTENT_LENGTH = 3 * 1024 * 1024 * 1024
 
 class ProdConfig(Config):
   SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI', None)

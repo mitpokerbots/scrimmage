@@ -14,7 +14,7 @@ from scrimmage.models import Bot, Game, GameStatus
 from scrimmage.helpers import get_s3_object, put_s3_object
 
 ENGINE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'deps', 'engine.jar'))
-MAX_ZIP_SIZE = 50 * 1024 * 1024
+MAX_ZIP_SIZE = 10 * 1024 * 1024 * 1024
 
 def render_template(tpl_path, **context):
     tpl_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates', tpl_path))
