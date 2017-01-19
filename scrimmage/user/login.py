@@ -6,13 +6,13 @@ from urllib import urlencode
 
 from scrimmage import app
 
-def _verify_token(email, time, token):
+def _verify_token(email, t, token):
   if app.debug:
     return True, None
-  if abs(time.time() - int(time)) < 2:
+  if abs(time.time() - int(t)) > 5:
     return False, "Token is too old."
   h = sha256()
-  h.update(email + time + app.config['AUTH_KEY'])
+  h.update(email + t + app.config['AUTH_KEY'])
   if h.hexdigest() != token:
     return False, "Token does not match."
   if email[-8:].lower() != '@mit.edu':
