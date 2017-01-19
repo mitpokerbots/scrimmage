@@ -8,7 +8,7 @@ from scrimmage.settings import settings
 ADMINS = set(['jserrino', 'sidds'])
 
 def is_admin(kerberos):
-  return kerberos in ADMINS or kerberos in [kerb.lower().trim() for kerb in settings['extra_admins'].split(',')]
+  return kerberos in ADMINS or kerberos in [kerb.lower().strip() for kerb in settings['extra_admins'].split(',')]
 
 @app.before_request
 def set_up_g():
