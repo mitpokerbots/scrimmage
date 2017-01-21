@@ -71,7 +71,7 @@ def _download_and_verify(player, bot, tmp_dir):
         return root
 
     return False
-  except OSError:
+  except subprocess.CalledProcessError, OSError:
     return False
 
 
