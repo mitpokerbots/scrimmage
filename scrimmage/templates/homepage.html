@@ -29,7 +29,7 @@
         </thead>
         <tbody>
           {% for team in teams|sort(attribute='elo', reverse=True) %}
-            <tr{% if g.team == team %} class="info"{% endif %}>
+            <tr{% if g.team == team %} class='info'{% elif team.must_autoaccept %} class='warning'{% endif %}>
               <td>{{ team.name }}</td>
               <td>{{ team.elo|round }}</td>
               <td>{{ team.wins }}/{{ team.losses }}</td>
