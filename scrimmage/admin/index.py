@@ -2,6 +2,8 @@ from flask import g, render_template, request, session, redirect, url_for
 
 from scrimmage import app, db
 from scrimmage.decorators import admin_required
+from scrimmage.decorators import admin_required, set_flash
+from scrimmage.models import Game, GameStatus
 
 @app.route('/admin/')
 @admin_required
