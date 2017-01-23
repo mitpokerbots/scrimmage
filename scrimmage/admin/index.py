@@ -1,8 +1,8 @@
 from flask import g, render_template, request, session, redirect, url_for, send_file
 
 from scrimmage import app, db
-from scrimmage.decorators import admin_required
 from scrimmage.decorators import admin_required, set_flash
+from scrimmage.helpers import get_s3_object
 from scrimmage.models import Game, GameStatus
 
 @app.route('/admin/')
