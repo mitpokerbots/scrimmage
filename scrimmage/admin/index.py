@@ -1,4 +1,4 @@
-from flask import g, render_template, request, session, redirect, url_for
+from flask import g, render_template, request, session, redirect, url_for, send_file
 
 from scrimmage import app, db
 from scrimmage.decorators import admin_required
