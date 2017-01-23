@@ -23,3 +23,16 @@ def admin_settings():
     g.settings[request.form['key']] = request.form['value']
     db.session.commit()
   return render_template('admin/settings.html')
+
+@app.route('/admin/games')
+@admin_required
+def admin_all_games():
+  pagination = Game.query.order_by(Game.create_time.desc()).paginate()
+  return render_template('admin/all_games.html', pagination=pagination)
+
+@app.route('/admin/game/<int:game_id>/log')
+@admin_required
+def admin_game_log(game_id):
+  game = Game.query.get(game_id)
+  assert game.status == GameStatus.completed
+  return send_file(get_s3_object(game.log_s3_key), mimetype="text/plain")
