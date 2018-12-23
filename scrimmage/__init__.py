@@ -2,6 +2,7 @@ import os
 from celery import Celery
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.contrib.cache import SimpleCache
 
 app = Flask(__name__)
 config_object_str = 'scrimmage.config.ProdConfig' if os.environ.get('PRODUCTION', False) else 'scrimmage.config.DevConfig'
@@ -20,7 +21,14 @@ def make_celery(flask_app):
     celery.Task = ContextTask
     return celery
 
+
+def make_cache(flask_app):
+    # Use RedisCache later
+    return SimpleCache()
+
+
 celery_app = make_celery(app)
+cache = make_cache(app)
 
 import scrimmage.user
 import scrimmage.admin
