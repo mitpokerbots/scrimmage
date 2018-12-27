@@ -1,4 +1,7 @@
+alembic==1.0.5
 amqp==2.1.4
+backports.tempfile==1.0rc1
+backports.weakref==1.0rc1
 billiard==3.5.0.2
 boto3==1.4.3
 botocore==1.4.92
@@ -7,14 +10,17 @@ click==6.6
 docutils==0.13.1
 enum34==1.1.6
 Flask==0.11.1
+Flask-Migrate==2.3.1
 Flask-SQLAlchemy==2.1
 futures==3.0.5
 itsdangerous==0.24
 Jinja2==2.8.1
 jmespath==0.9.0
 kombu==4.0.2
+Mako==1.0.7
 MarkupSafe==0.23
 python-dateutil==2.6.0
+python-editor==1.0.3
 pytz==2016.10
 s3transfer==0.1.10
 six==1.10.0
