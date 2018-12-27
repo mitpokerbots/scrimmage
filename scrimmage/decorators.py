@@ -5,7 +5,7 @@ from scrimmage import app, db
 from scrimmage.models import User
 from scrimmage.settings import settings
 
-ADMINS = set(['jserrino', 'sidds'])
+ADMINS = set(['jserrino', 'nilai', 'davidja', 'larryq', 'shreyass'])
 
 def is_admin(kerberos):
   return kerberos in ADMINS or kerberos in [kerb.lower().strip() for kerb in settings['extra_admins'].split(',')]

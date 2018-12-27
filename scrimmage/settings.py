@@ -3,9 +3,9 @@ from scrimmage import app, db
 from scrimmage.models import AdminSetting
 
 DEFAULTS = {
-  'spawn_limit_per_team': '1',
+  'spawn_limit_per_team': '3',
   'recent_games_to_show': '15',
-  'challenges_enabled': 'false',
+  'challenges_enabled': 'true',
   'extra_admins': ''
 }
 

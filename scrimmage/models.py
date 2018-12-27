@@ -13,6 +13,17 @@ class AdminSetting(db.Model):
     self.value = value
 
 
+class Announcement(db.Model):
+  __tablename__ = 'announcements'
+  id = db.Column(db.Integer, primary_key=True)
+  author_kerberos = db.Column(db.String(128))
+  text = db.Column(db.Text)
+
+  def __init__(self, author_kerberos, text):
+    self.author_kerberos = author_kerberos
+    self.text = text
+
+
 class User(db.Model):
   __tablename__ = 'users'
   id = db.Column(db.Integer, primary_key=True)

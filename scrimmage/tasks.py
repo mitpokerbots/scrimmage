@@ -172,11 +172,11 @@ def _play_game(game):
         'config.txt',
         challenger={
           'name': challenger_name,
-          'path': challenger_bot_path
+          'path': challenger_path_or_msg
         },
         opponent={
           'name': opponent_name,
-          'path': opponent_bot_path
+          'path': opponent_path_or_msg
         }
       )
       config_file.write(config_txt)

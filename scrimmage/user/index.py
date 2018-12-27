@@ -9,9 +9,10 @@ def index():
   games_to_show = int(g.settings['recent_games_to_show'])
   recent_games = Game.query.order_by(Game.create_time.desc()).limit(games_to_show).all()
   if not g.is_logged_in:
-    return render_template('logged_out.html', message="Please log in to continue", recent_games=recent_games)
+    return render_template('logged_out.html', recent_games=recent_games)
   elif not g.team:
-    return render_template('logged_out.html', message="Thanks for logging in. Unfortuantely, you do not have a team, so this page is hidden.", recent_games=recent_games)
+    return render_template('no_team.html')
+  
   teams = Team.query.filter(Team.is_disabled == False).all()
   challengeable_teams = [team for team in teams if team != g.team and team.can_be_challenged()]
   return render_template('homepage.html',
