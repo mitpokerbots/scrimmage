@@ -67,6 +67,7 @@ class Team(db.Model):
   id = db.Column(db.Integer, primary_key=True)
   name = db.Column(db.String(128), unique=True)
   members = db.relationship("User", back_populates="team")
+  join_requests = db.relationship("TeamJoinRequest", back_populates="team")
   elo = db.Column(db.Float)
   wins = db.Column(db.Integer)
   losses = db.Column(db.Integer)
@@ -94,6 +95,13 @@ class Team(db.Model):
   def can_be_challenged(self):
     return self.current_bot is not None and not self.is_disabled
 
+  def can_be_joined(self):
+    from scrimmage.settings import settings
+    return len(self.members) < int(settings['maximum_team_size'])
+
+  def can_be_requested(self):
+    return self.can_be_joined() and not self.must_autoaccept and not self.is_disabled
+
   def can_initiate(self):
     from scrimmage.settings import settings
     num_games_outstanding = Game.query.filter(Game.initiator == self).filter(Game.status.in_([GameStatus.created, GameStatus.in_progress])).count()
@@ -114,6 +122,19 @@ class Team(db.Model):
                              .filter(GameRequest.status == GameRequestStatus.challenged)
                              .order_by(GameRequest.create_time.desc())
                              .all())
+
+
+class TeamJoinRequest(db.Model):
+  __tablename__ = 'join_requests'
+  id = db.Column(db.Integer, primary_key=True)
+  kerberos = db.Column(db.String(128), unique=True, index=True)
+  team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+  team = db.relationship("Team", back_populates="join_requests")
+
+  def __init__(self, kerberos, team):
+    assert team.can_be_requested()
+    self.kerberos = kerberos
+    self.team = team
 
 
 class GameRequestStatus(enum.Enum):

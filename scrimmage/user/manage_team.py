@@ -4,14 +4,15 @@ from flask import g, redirect, render_template, request, url_for, send_file
 
 from scrimmage import app, db
 from scrimmage.decorators import team_required
-from scrimmage.models import Bot, GameRequest, Game, GameStatus
+from scrimmage.models import Bot, GameRequest, Game, GameStatus, TeamJoinRequest, Team, User
 from scrimmage.helpers import get_s3_object, put_s3_object
+
+from coolname import generate_slug
 
 @app.route('/team')
 @team_required
 def manage_team():
-  outgoing_requests = g.team.outgoing_requests()
-  return render_template('manage_team.html', outgoing_requests=outgoing_requests)
+  return render_template('manage_team.html')
 
 
 @app.route('/team/games')
@@ -39,7 +40,7 @@ def create_bot():
   name = request.form['name']
 
   if name == '' or name is None:
-    name = os.urandom(4).encode('hex')
+    name = generate_slug(2)
 
   key = os.path.join('bots', str(g.team.id), os.urandom(10).encode('hex') + '.zip')
   put_s3_object(key, fil)
@@ -58,3 +59,34 @@ def set_bot():
   g.team.set_current_bot(bot)
   db.session.commit()
   return redirect(url_for('manage_team'))
+
+
+@app.route('/team/leave', methods=['POST'])
+@team_required
+def leave_team():
+  if len(g.team.members) == 1:
+    g.team.is_disabled = True
+
+  me = User.query.filter(User.kerberos == g.kerberos).one_or_none()
+  assert me is not None
+  db.session.delete(me)
+  db.session.commit()
+
+  return redirect(url_for('index'))
+
+
+@app.route('/team/answer_join', methods=['POST'])
+@team_required
+def answer_join():
+  join_request = TeamJoinRequest.query.filter(TeamJoinRequest.team == g.team and TeamJoinRequest.kerberos == request.form['kerberos']).one_or_none()
+  assert join_request is not None
+
+  if request.form['action'] == 'accept':
+    assert g.team.can_be_joined()
+    user = User(join_request.kerberos, join_request.team)
+    db.session.add(user)
+
+  db.session.delete(join_request)
+  db.session.commit()
+  return redirect(url_for('manage_team'))
+

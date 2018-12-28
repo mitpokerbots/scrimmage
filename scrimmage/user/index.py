@@ -1,8 +1,8 @@
 from flask import render_template, g, url_for, redirect, request
 
 from scrimmage import app, db
-from scrimmage.models import Team, GameRequest, GameRequestStatus, Game, Announcement
-from scrimmage.decorators import team_required, set_flash
+from scrimmage.models import User, Team, TeamJoinRequest, GameRequest, GameRequestStatus, Game, Announcement
+from scrimmage.decorators import login_required, team_required, set_flash
 
 @app.route('/')
 def index():
@@ -14,10 +14,14 @@ def index():
 
   announcements = Announcement.query.order_by(Announcement.create_time.desc()).limit(1).all()
   if not g.team:
-    return render_template('no_team.html', announcements=announcements)
+    join_request = TeamJoinRequest.query.filter(TeamJoinRequest.kerberos == g.kerberos).one_or_none()
+    joinable_teams = Team.query.filter(Team.is_disabled == False and Team.must_autoaccept == False).all()
+    requestable_teams = [team for team in joinable_teams if team.can_be_requested()]
+    return render_template('no_team.html', announcements=announcements, teams=requestable_teams, join_request=join_request)
   
   teams = Team.query.filter(Team.is_disabled == False).all()
   challengeable_teams = [team for team in teams if team.can_be_challenged()]
+  challengeable_teams.append(g.team)
   return render_template('homepage.html',
                          challengeable_teams=challengeable_teams,
                          pending_requests=g.team.pending_requests(),
@@ -25,7 +29,42 @@ def index():
                          announcements=announcements)
 
 
+
+@app.route('/request_team', methods=['POST'])
+@login_required
+def request_team():
+  team = Team.query.get(int(request.form['team_id']))
+  assert team.can_be_requested()
+  join_request = TeamJoinRequest(g.kerberos, team)
+  db.session.add(join_request)
+  db.session.commit()
+  return redirect(url_for('index'))
+
+
+@app.route('/request_team/cancel', methods=['POST'])
+@login_required
+def cancel_team_request():
+  join_request = TeamJoinRequest.query.filter(TeamJoinRequest.kerberos == g.kerberos).one_or_none()
+  assert join_request is not None
+  db.session.delete(join_request)
+  db.session.commit()
+  return redirect(url_for('index'))
+
+
+@app.route('/create_team', methods=['POST'])
+@login_required
+def create_team():
+  team_name = request.form['team_name']
+  team = Team(team_name)
+  db.session.add(team)
+  user = User(g.kerberos, team)
+  db.session.add(user)
+  db.session.commit()
+  return redirect(url_for('index'))
+
+
 @app.route('/announcements')
+@login_required
 def announcements():
   announcements = Announcement.query.order_by(Announcement.create_time.desc()).all()
   return render_template('announcements.html', announcements=announcements)

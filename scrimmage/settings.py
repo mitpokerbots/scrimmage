@@ -4,6 +4,7 @@ from scrimmage.models import AdminSetting
 
 DEFAULTS = {
   'spawn_limit_per_team': '3',
+  'maximum_team_size': '4',
   'recent_games_to_show': '30',
   'challenges_enabled': 'true',
   'extra_admins': ''

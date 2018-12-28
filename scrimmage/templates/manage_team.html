@@ -15,7 +15,7 @@
           {% endif %}
         </p>
         <h3>Statistics</h3>
-        <div class="ui four statistics">
+        <div class="ui four small statistics">
           <div class="statistic">
             <div class="value">
               {{ g.team.elo|int }}
@@ -50,24 +50,66 @@
           </div>
         </div>
       </div>
-      <h3>Outgoing challenges</h3>
+      <h3>Teammates</h3>
       <div>
         <div class="ui segments">
-          {% for request in outgoing_requests %}
-          <div class="ui segment">
-            <h3 class="ui header">
-              <div class="content">
-                To: {{ request.opponent.name }}
-                <div class="sub header">{{ request.create_time | naturaltime }}</div>
-              </div>
-            </h3>
-          </div>
-          {% else %}
-            <div class='ui segment'>
-              Your outgoing requests appear here.
+          {% for member in g.team.members %}
+            <div class="ui segment">
+              <h3 class="ui header">
+                <div class="content">
+                  {{ member.kerberos }}
+                </div>
+              </h3>
             </div>
           {% endfor %}
         </div>
+      </div>
+
+      <h3>Incoming Teammate Requests</h3>
+      <div>
+        <div class="ui segments">
+          {% if g.team.can_be_joined() %}
+            {% for request in g.team.join_requests %}
+            <div class="ui segment">
+              <h3 class="ui header">
+                <div class="content">
+                  {{ request.kerberos }}
+                </div>
+                <div style="float: right;">
+                  <form style="margin: 0; display: inline-block;" class="ui inline form" action="{{ url_for('answer_join') }}", method="POST">
+                    <input type="hidden" name="kerberos" value="{{ request.kerberos }}">
+                    <input type="hidden" name="action" value="accept" />
+                    <button class="ui mini positive button">Accept</button>
+                  </form>
+                  <form style="margin: 0; display: inline-block;" class="ui inline form" action="{{ url_for('answer_join') }}", method="POST">
+                    <input type="hidden" name="kerberos" value="{{ request.kerberos }}">
+                    <input type="hidden" name="action" value="reject" />
+                    <button class="ui mini negative button">Reject</button>
+                  </form>
+                </div>
+              </h3>
+            </div>
+            {% else %}
+              <div class='ui segment'>
+                If someone requests to join your team, they will appear here.
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class='ui segment'>
+              Your team is full - no one else can join.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <h3>Leave team</h3>
+      <div>
+        <div class="ui message">
+          Use the button below to leave your team. If you are the only person on the team, your team will be disabled.
+        </div>
+        <form action="{{ url_for('leave_team') }}" method="POST" onsubmit="return confirm('Are you sure you want to leave? This action cannot be undone.');">
+          <button class="ui mini basic negative button">Leave team</button>
+        </form>
       </div>
     </div>
     <div class="eight wide column">
@@ -142,4 +184,10 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$('select.dropdown').dropdown();
+</script>
 {% endblock %}

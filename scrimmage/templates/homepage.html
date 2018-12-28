@@ -130,6 +130,25 @@
           {% endfor %}
         </div>
       </div>
+      <h3>Outgoing challenges</h3>
+      <div>
+        <div class="ui segments">
+          {% for request in g.team.outgoing_requests() %}
+          <div class="ui segment">
+            <h3 class="ui header">
+              <div class="content">
+                To: {{ request.opponent.name }}
+                <div class="sub header">{{ request.create_time | naturaltime }}</div>
+              </div>
+            </h3>
+          </div>
+          {% else %}
+            <div class='ui segment'>
+              Your outgoing requests appear here.
+            </div>
+          {% endfor %}
+        </div>
+      </div>
     </div>
   </div>
   <br />
@@ -137,4 +156,10 @@
     {% include '_announcements.html' %}
   {% endwith %}
   {% include '_recent_games.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+$('select.dropdown').dropdown();
+</script>
 {% endblock %}
