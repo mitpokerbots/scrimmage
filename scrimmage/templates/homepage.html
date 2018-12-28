@@ -15,6 +15,14 @@
       Your team is currently disabled, and cannot challenge or receive new challenges.
     </div>
   {% endif %}
+  {% if not g.team.can_challenge() %}
+    <div class="ui warning message">
+      <div class="header">
+        Team not ready!
+      </div>
+      Your team is not ready to play. <a href="{{ url_for('manage_team') }}">Go to the team management page</a> to upload and select a bot.
+    </div>
+  {% endif %}
   <div class="ui stackable grid container">
     <div class="ten wide column">
       <h2>Team Standings</h2>
@@ -57,42 +65,38 @@
         </tbody>
       </table>
       {% if g.settings['challenges_enabled'].lower() == 'true' %}
-        {% if g.team.can_challenge() %}
-          {% if challengeable_teams|length > 0 %}
-            <form class="ui inline form" action="{{ url_for('challenge') }}" method="POST">
-              <div class="two fields">
-                <div class="field">
-                  <label>Challenge</label>
-                  <select class="ui dropdown" name="team_id">
-                    {% for team in challengeable_teams|sort(attribute='name') %}
+        {% if challengeable_teams|length > 1%}
+          <form class="ui inline form" action="{{ url_for('challenge') }}" method="POST">
+            <div class="{% if not g.team.can_challenge() %}disabled {% endif %}two fields">
+              <div class="field">
+                <label>Challenge</label>
+                <select class="ui dropdown" name="team_id">
+                  {% for team in challengeable_teams|sort(attribute='name') %}
+                    {% if team != g.team %}
                       <option value='{{ team.id }}'>
                         {{ team.name }}
                       </option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div class="field">
-                  <label>&nbsp;</label>
-                  <button class="ui primary button">Challenge!</button>
-                </div>
+                    {% endif %}
+                  {% endfor %}
+                </select>
               </div>
-            </form>
-            <p>
-              Challenges for people of higher ELO will automatically be accepted. Challenges for reference (yellow) players will also automatically be accepted.
-            </p>
-          {% else %}
-            <p>
-              You're the only team who is ready to play! Please wait a bit for teams to upload their bots.
-            </p>
-          {% endif %}
+              <div class="field">
+                <label>&nbsp;</label>
+                <button class="ui primary button">Challenge!</button>
+              </div>
+            </div>
+          </form>
+          <p>
+            Challenges for people of higher ELO will automatically be accepted. Challenges for reference (yellow) players will also automatically be accepted.
+          </p>
         {% else %}
           <p>
-            Your team has not uploaded and selected a bot! You must go to the team management page before you can challenge people.
+            You're the only team who is ready to play! Please wait a bit for teams to upload their bots.
           </p>
         {% endif %}
       {% else %}
         <p>
-          Challenges are currently disabled. Upload a bot so you can play immediately when they are enabled.
+          Challenges are currently disabled.
         </p>
       {% endif %}
     </div>
