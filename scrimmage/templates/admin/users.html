@@ -5,7 +5,7 @@
     <h1>Admin: Users list</h1>
   </div>
 
-  <table class="table table-striped">
+  <table class="ui striped celled table">
     <thead>
       <tr>
         <th>#</th>
@@ -22,43 +22,53 @@
           <td>{{ user.kerberos }}</td>
           <td>{{ user.team.name }}</td>
           <td>
-            <form class="form-inline" action="{{ url_for('admin_user_set_team', user_id=user.id) }}" method="POST">
-              <select name="team_id">
+            <form action="{{ url_for('admin_user_set_team', user_id=user.id) }}" method="POST" style="width: 100%; display: flex; flex-direction: horizontal;">
+              <select class="ui dropdown" name="team_id" style="flex: 1">
                 {% for team in teams|sort(attribute='name') %}
                   <option value="{{ team.id }}"{% if team == user.team %} selected{% endif %}>{{ team.name }}</option>
                 {% endfor %}
-              </select>
-              <input type="submit" class="btn btn-warn" value="Change">
+              </select> &nbsp;
+              <button class="ui button">Change</button>
             </form>
           </td>
-          <td>
+          <td style='text-align: center;'>
             <form class="form-inline" action="{{ url_for('admin_user_delete', user_id=user.id) }}" method="POST">
-              <input type="submit" class="btn btn-danger" value="Delete User">
+              <button type="submit" class="ui basic negative icon button"><i class="times icon"></i></button>
             </form>
           </td>
       {% else %}
         <tr><td colspan=5>No users yet, create one below</td></tr>
       {% endfor %}
     </tbody>
-    <tfoot>
-      <tr>
-        <td colspan=5>
-          {% if teams|length > 0 %}
-            Create:
-            <form class="form-inline" action="{{ url_for('admin_users_create') }}" method="POST">
-              <input type="text" placeholder="kerberos" name="kerberos">
-              <select name="team_id">
-                {% for team in teams|sort(attribute='name') %}
-                  <option value="{{ team.id }}">{{ team.name }}</option>
-                {% endfor %}
-              </select>
-              <input type="submit" class="btn btn-success" value="Create User">
-            </form>
-          {% else %}
-            You must create a team before you can create users.
-          {% endif %}
-        </td>
-      </tr>
-    </tfoot>
   </table>
+  <div class="ui segment">
+    <h2 class="ui header">Create a user</h2>
+
+    {% if teams|length > 0 %}
+      <form class="ui inline form" action="{{ url_for('admin_users_create') }}" method="POST">
+        <div class="ui three fields">
+          <div class="field">
+            <label>Kerberos</label>
+            <input type="text" placeholder="i.e. jserrino" name="kerberos">
+          </div>
+          <div class="field">
+            <label>Team</label>
+            <select class="ui dropdown" name="team_id">
+              {% for team in teams|sort(attribute='name') %}
+                <option value="{{ team.id }}">{{ team.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="ui positive button">Create</button>
+          </div>
+        </div>
+      </form>
+    {% else %}
+      <p>
+        There must be teams to create users.
+      </p>
+    {% endif %}
+  </div>
 {% endblock %}

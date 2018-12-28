@@ -1,7 +1,7 @@
 from flask import render_template, g, url_for, redirect, request
 
 from scrimmage import app, db
-from scrimmage.models import Team, GameRequest, GameRequestStatus, Game
+from scrimmage.models import Team, GameRequest, GameRequestStatus, Game, Announcement
 from scrimmage.decorators import team_required, set_flash
 
 @app.route('/')
@@ -9,17 +9,26 @@ def index():
   games_to_show = int(g.settings['recent_games_to_show'])
   recent_games = Game.query.order_by(Game.create_time.desc()).limit(games_to_show).all()
   if not g.is_logged_in:
-    return render_template('logged_out.html', recent_games=recent_games)
-  elif not g.team:
-    return render_template('no_team.html')
+    announcements = Announcement.query.filter(Announcement.is_public == True).order_by(Announcement.create_time.desc()).all()
+    return render_template('logged_out.html', recent_games=recent_games, announcements=announcements)
+
+  announcements = Announcement.query.order_by(Announcement.create_time.desc()).limit(1).all()
+  if not g.team:
+    return render_template('no_team.html', announcements=announcements)
   
   teams = Team.query.filter(Team.is_disabled == False).all()
-  challengeable_teams = [team for team in teams if team != g.team and team.can_be_challenged()]
+  challengeable_teams = [team for team in teams if team.can_be_challenged()]
   return render_template('homepage.html',
-                         teams=teams,
                          challengeable_teams=challengeable_teams,
                          pending_requests=g.team.pending_requests(),
-                         recent_games=recent_games)
+                         recent_games=recent_games,
+                         announcements=announcements)
+
+
+@app.route('/announcements')
+def announcements():
+  announcements = Announcement.query.order_by(Announcement.create_time.desc()).all()
+  return render_template('announcements.html', announcements=announcements)
 
 
 @app.route('/challenge', methods=['POST'])

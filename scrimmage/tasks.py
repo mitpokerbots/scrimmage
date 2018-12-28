@@ -33,7 +33,7 @@ def _verify_zip(zip_file_path):
     if total_size > MAX_ZIP_SIZE:
       return False, 'Bot zip would be too large unzipped'
     return True, None
-  except zipfile.BadZipFile, zipfile.LargeZipFile:
+  except zipfile.BadZipfile, zipfile.LargeZipfile:
     return False, 'Bot zip file is malformed'
 
 

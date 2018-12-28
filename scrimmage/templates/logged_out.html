@@ -2,10 +2,9 @@
 
 {% block content %}
   <h1>MIT Pokerbots Scrimmage Server</h1>
-  <div class="row">
-    <div class="col-md-12">
-      Please log in to continue.
-    </div>
-  </div>
+  <p>
+    Please <a href="{{ url_for('login') }}">log in</a> to continue. MIT Certificates are required.
+  </p>
+  {% include '_announcements.html' %}
   {% include '_recent_games.html' %}
 {% endblock %}

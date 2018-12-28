@@ -5,6 +5,10 @@ from scrimmage import app, db
 from scrimmage.models import User
 from scrimmage.settings import settings
 
+import humanize
+from pytz import timezone
+import datetime
+
 ADMINS = set(['jserrino', 'nilai', 'davidja', 'larryq', 'shreyass'])
 
 def is_admin(kerberos):
@@ -16,6 +20,7 @@ def set_up_g():
     g.is_logged_in
     g.is_admin
     g.kerberos
+    g.real_kerberos
     g.team
   """
   g.settings = settings
@@ -23,10 +28,12 @@ def set_up_g():
   g.is_admin = False
   g.team = None
   g.kerberos = None
+  g.real_kerberos = None
   if 'kerberos' not in session:
     return
   g.is_logged_in = True
   g.kerberos = session['kerberos']
+  g.real_kerberos = session['real_kerberos']
   g.is_admin = is_admin(session['real_kerberos'])
   user = User.query.filter(User.kerberos == g.kerberos).one_or_none()
   if user is not None:
@@ -38,7 +45,12 @@ def flash():
   return dict(flash=session.pop('flash', None), flash_level=session.pop('flash_level', None))
 
 
-def set_flash(message, level='info'):
+@app.template_filter('naturaltime')
+def naturaltime(d):
+  return humanize.naturaltime(datetime.datetime.now(timezone('America/New_York')) - d.replace(tzinfo=timezone('UTC')))
+
+
+def set_flash(message, level=''):
   session['flash'] = message
   session['flash_level'] = level
 

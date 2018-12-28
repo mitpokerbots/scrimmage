@@ -22,7 +22,7 @@
           >
             {{ game.opponent.name }}
           </td>
-          <td>{{ game.create_time }}</td>
+          <td>{{ game.create_time | naturaltime }}</td>
           <td>{{ game.friendly_status() }}</td>
         </tr>
       {% else %}
@@ -31,3 +31,4 @@
     </tbody>
   </table>
 </div>
+<br />

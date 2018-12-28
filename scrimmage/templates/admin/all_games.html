@@ -1,54 +1,45 @@
 {% extends "layout.html" %}
 
 {% block content %}
-  <div class="page-header">
-    <h1>All games</h1>
+  <h1>Admin: All games</h1>
+  <div class="ui pagination menu">
+    {% if pagination.has_prev %}
+      <a class="item" href="{{ url_for('admin_all_games', page=pagination.prev_num) }}">
+        <i class="angle left icon"></i>
+      </a>
+    {% else %}
+      <div class="disabled item">
+        <i class="angle left icon"></i>
+      </div>
+    {% endif %}
+
+    {% for page in pagination.iter_pages() %}
+      {% if page %}
+        <a class="item {% if page == pagination.page %}active{% endif %}" href="{{ url_for('admin_all_games', page=page) }}">
+          {{ page }}
+        </a>
+      {% else %}
+        <div class="disabled item">
+          ...
+        </div>
+      {% endif %}
+    {% endfor %}
+
+    {% if pagination.has_next %}
+      <a class="item" href="{{ url_for('admin_all_games', page=pagination.next_num) }}">
+        <i class="angle right icon"></i>
+      </a>
+    {% else %}
+      <div class="disabled item">
+        <i class="angle right icon"></i>
+      </div>
+    {% endif %}
   </div>
-  <div class="pagination">
-    <ul>
-      <li
-          {% if not pagination.has_prev %}
-            class="disabled"
-          {% endif %}
-      >
-        <a
-          {% if pagination.has_prev %}
-            href="{{ url_for('admin_all_games', page=pagination.prev_num) }}"
-          {% else %}
-            href="#"
-          {% endif %}
-        >Prev</a>
-      </li>
-      {% for page in pagination.iter_pages() %}
-        {% if page %}
-          {% if page != pagination.page %}
-            <li><a href="{{ url_for('admin_all_games', page=page) }}">{{ page }}</a></li>
-          {% else %}
-            <li class="active"><a href="#">{{ page }}</a></li>
-          {% endif %}
-        {% else %}
-          <li><span>…</span></li>
-        {% endif %}
-      {% endfor %}
-      <li
-          {% if not pagination.has_next %}
-            class="disabled"
-          {% endif %}
-      >
-        <a
-          {% if pagination.has_next %}
-            href="{{ url_for('admin_all_games', page=pagination.next_num) }}"
-          {% else %}
-            href="#"
-          {% endif %}
-        >Next</a>
-      </li>
-    </ul>
-  </div>
-  <table class="table table-bordered table-striped">
+  <table class="ui striped celled table">
     <thead>
       <tr>
-        <th></th>
+        <th>#</th>
+        <th>Status</th>
         <th>Challenger</th>
         <th>C. ELO</th>
         <th>C. Bot</th>
@@ -62,17 +53,20 @@
     </thead>
     <tbody>
       {% for game in pagination.items %}
-        <tr>
+        <tr
+          {% if game.status.value == 'created' %}
+            class="disabled"
+          {% elif game.status.value == 'in_progress' %}
+            class="disabled"
+          {% elif game.status.value == 'internal_error' %}
+            class="negative"
+          {% elif game.status.value == 'completed' %}
+            class="positive"
+          {% endif %}
+        >
+          <td>{{ game.id }}</td>
           <td>
-            {% if game.status.value == 'created' %}
-              <span class="label">{{ game.friendly_status() }}</span>
-            {% elif game.status.value == 'in_progress' %}
-              <span class="label label-warning">{{ game.friendly_status() }}</span>
-            {% elif game.status.value == 'error' %}
-              <span class="label label-inverse">{{ game.friendly_status() }}</span>
-            {% elif game.status.value == 'completed' %}
-              <span class="label label-success">Completed</span>
-            {% endif %}
+            {{ game.friendly_status() }}
           </td>
           <td>{{ game.challenger.name }}</td>
           <td>{{ game.challenger_elo|round }}</td>
@@ -92,12 +86,12 @@
             {% if game.status.value == 'completed' %}
               <a href="{{ url_for('admin_game_log', game_id=game.id) }}">Log</a>
             {% else %}
-              Not yet available
+              Not available
             {% endif %}
           </td>
         </tr>
       {% else %}
-        <tr><td colspan=9>Once you have played some games, they will show up here.</td></tr>
+        <tr><td colspan=11>Once you have played some games, they will show up here.</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -17,11 +17,16 @@ class Announcement(db.Model):
   __tablename__ = 'announcements'
   id = db.Column(db.Integer, primary_key=True)
   author_kerberos = db.Column(db.String(128))
+  title = db.Column(db.String(256))
   text = db.Column(db.Text)
+  is_public = db.Column(db.Boolean, default=False)
+  create_time = db.Column(db.DateTime, default=db.func.now())
 
-  def __init__(self, author_kerberos, text):
+  def __init__(self, author_kerberos, title, text, is_public):
     self.author_kerberos = author_kerberos
+    self.title = title
     self.text = text
+    self.is_public = is_public
 
 
 class User(db.Model):

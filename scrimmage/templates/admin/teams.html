@@ -1,20 +1,18 @@
 {% extends "layout.html" %}
 
 {% block content %}
-  <div class="page-header">
-    <h1>Admin: Teams list</h1>
-  </div>
+  <h1>Admin: Teams list</h1>
   {% if flash %}
-    <div class="alert alert-{{ flash_level }}">
-      <button type="button" class="close" data-dismiss="alert">&times;</button>
+    <div class="ui {{ flash_level }} message">
       {{ flash }}
     </div>
   {% endif %}
-  <table class="table table-striped">
+  <table class="ui celled striped table">
     <thead>
       <tr>
         <th>#</th>
         <th>name</th>
+        <th>members</th>
         <th>wins</th>
         <th>losses</th>
         <th>elo</th>
@@ -27,26 +25,63 @@
         <tr>
           <td>{{ team.id }}</td>
           <td>{{ team.name }}</td>
-          <td>{{ team.wins }}</td>
-          <td>{{ team.losses }}</td>
-          <td>{{ team.elo }}</td>
           <td>
-            <form class="form-inline" action="{{ url_for('admin_team_modify', team_id=team.id) }}" method="POST">
-              <select name="is_disabled">
-                <option value="no" {% if not team.is_disabled %} selected {% endif %}>Enabled</option>
-                <option value="yes" {% if team.is_disabled %} selected {% endif %}>Disabled</option>
-              </select>
-              <select name="must_autoaccept">
-                <option value="no" {% if not team.must_autoaccept %} selected {% endif %}>Doesn't auto-accept</option>
-                <option value="yes" {% if team.must_autoaccept %} selected {% endif %}>Auto-accept</option>
-              </select>
-              <input type="submit" class="btn btn-warning" value="Modify">
-            </form>
+            {% for member in team.members %}
+              {{ member.kerberos }}
+              {{ ',' if not loop.last }}
+            {% else %}
+              No members.
+            {% endfor %}
+          </td>
+          <td style="text-align: center">
+            <div class="ui green statistic">
+              <div class="value">
+                {{ team.wins }}
+              </div>
+            </div>
+          </td>
+          <td style="text-align: center">
+            <div class="ui red statistic">
+              <div class="value">
+                {{ team.losses }}
+              </div>
+            </div>
+          </td>
+          <td style="text-align: center">
+            <div class="ui mini statistic">
+              <div class="value">
+                {{ team.elo | int }}
+              </div>
+            </div>
           </td>
           <td>
+            <form class="ui inline form" action="{{ url_for('admin_team_modify', team_id=team.id) }}" method="POST">
+              <div class="three fields">
+                <div class="field">
+                  <label>Enabled?</label>
+                  <select name="is_disabled" class="ui fluid dropdown">
+                    <option value="no" {% if not team.is_disabled %} selected {% endif %}>Enabled</option>
+                    <option value="yes" {% if team.is_disabled %} selected {% endif %}>Disabled</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Auto-accepts?</label>
+                  <select name="must_autoaccept" class="ui fluid dropdown">
+                    <option value="no" {% if not team.must_autoaccept %} selected {% endif %}>Doesn't auto-accept</option>
+                    <option value="yes" {% if team.must_autoaccept %} selected {% endif %}>Auto-accept</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>&nbsp;</label>
+                  <button class="ui positive basic button">Modify</button>
+                </div>
+              </div>
+            </form>
+          </td>
+          <td style="text-align: center">
             {% if team.can_be_deleted() %}
-              <form class="form-inline" action="{{ url_for('admin_team_delete', team_id=team.id) }}" method="POST">
-                <input type="submit" class="btn btn-danger" value="Delete team">
+              <form class="ui form" action="{{ url_for('admin_team_delete', team_id=team.id) }}" method="POST">
+                <button type="submit" class="ui basic negative icon button"><i class="times icon"></i></button>
               </form>
             {% endif %}
           </td>
@@ -54,16 +89,16 @@
         <tr><td colspan=7>No teams yet, create one below</td></tr>
       {% endfor %}
     </tbody>
-    <tfoot>
-      <tr>
-        <td colspan=6>
-          Create:
-          <form class="form-inline" action="{{ url_for('admin_teams_create') }}" method="POST">
-            <input type="text" placeholder="Team name" name="team_name">
-            <input type="submit" class="btn btn-success" value="Create team">
-          </form>
-        </td>
-      </tr>
-    </tfoot>
   </table>
+  <div class="ui segment">
+    <h2 class="ui header">Create a team</h2>
+
+    <form class="ui form inline" action="{{ url_for('admin_teams_create') }}" method="POST">
+      <div class="ui fluid action input">
+        <input type="text" placeholder="Team name" name="team_name">
+        <button class="ui positive button">Create</button>
+      </div>
+      <input type="hidden" name="key" value="{{ key }}">
+    </form>
+  </div>
 {% endblock %}

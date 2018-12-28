@@ -1,38 +1,57 @@
 {% extends "layout.html" %}
 
 {% block content %}
-  <div class="page-header">
-    <h1>MIT Pokerbots Scrimmage Server</h1>
-  </div>
+  <h1>{{ g.team.name }} - Pokerbots Scrimmage</h1>
   {% if flash %}
-    <div class="alert alert-{{ flash_level }}">
-      <button type="button" class="close" data-dismiss="alert">&times;</button>
+    <div class="ui {{ flash_level }} message">
       {{ flash }}
     </div>
   {% endif %}
   {% if g.team.is_disabled %}
-    <div class="alert alert-danger">
-      <button type="button" class="close" data-dismiss="alert">&times;</button>
+    <div class="ui warning message">
+      <div class="header">
+        Team disabled.
+      </div>
       Your team is currently disabled, and cannot challenge or receive new challenges.
     </div>
   {% endif %}
-  <div class="row">
-    <div class="span6">
+  <div class="ui stackable grid container">
+    <div class="ten wide column">
       <h2>Team Standings</h2>
-      <table class="table table-hover table-condensed table-bordered">
+      <table class="ui celled striped table">
         <thead>
           <tr>
             <th>Name</th>
             <th>ELO</th>
-            <th>W/L</th>
+            <th>Wins</th>
+            <th>Losses</th>
           </tr>
         </thead>
         <tbody>
-          {% for team in teams|sort(attribute='elo', reverse=True) %}
-            <tr{% if g.team == team %} class='info'{% elif team.must_autoaccept %} class='warning'{% endif %}>
+          {% for team in challengeable_teams|sort(attribute='elo', reverse=True) %}
+            <tr{% if g.team == team %} class='active'{% elif team.must_autoaccept %} class='warning'{% endif %}>
               <td>{{ team.name }}</td>
-              <td>{{ team.elo|round }}</td>
-              <td>{{ team.wins }}/{{ team.losses }}</td>
+              <td style="text-align: center">
+                <div class="ui mini statistic">
+                  <div class="value">
+                    {{ team.elo | int }}
+                  </div>
+                </div>
+              </td>
+              <td style="text-align: center">
+                <div class="ui mini green statistic">
+                  <div class="value">
+                    {{ team.wins }}
+                  </div>
+                </div>
+              </td>
+              <td style="text-align: center">
+                <div class="ui mini red statistic">
+                  <div class="value">
+                    {{ team.losses }}
+                  </div>
+                </div>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
@@ -40,19 +59,26 @@
       {% if g.settings['challenges_enabled'].lower() == 'true' %}
         {% if g.team.can_challenge() %}
           {% if challengeable_teams|length > 0 %}
-            <form class="form-inline" action="{{ url_for('challenge') }}" method="POST">
-              <label for="team_select">Challenge:</label>
-              <select name="team_id">
-                {% for team in challengeable_teams|sort(attribute='name') %}
-                  <option value='{{ team.id }}'>
-                    {{ team.name }}
-                  </option>
-                {% endfor %}
-              </select>
-              <input type="submit" class="btn btn-default" value="Challenge!">
+            <form class="ui inline form" action="{{ url_for('challenge') }}" method="POST">
+              <div class="two fields">
+                <div class="field">
+                  <label>Challenge</label>
+                  <select class="ui dropdown" name="team_id">
+                    {% for team in challengeable_teams|sort(attribute='name') %}
+                      <option value='{{ team.id }}'>
+                        {{ team.name }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="field">
+                  <label>&nbsp;</label>
+                  <button class="ui primary button">Challenge!</button>
+                </div>
+              </div>
             </form>
             <p>
-              Challenges for people of higher ELO will automatically be accepted.
+              Challenges for people of higher ELO will automatically be accepted. Challenges for reference (yellow) players will also automatically be accepted.
             </p>
           {% else %}
             <p>
@@ -70,48 +96,41 @@
         </p>
       {% endif %}
     </div>
-    <div class="span6">
-      <h2>Your Team: {{ g.team.name }}</h2>
+    <div class="six wide column">
+      <h2>Challenges</h2>
       <div>
-        <h3>Game Requests</h3>
-        <table class="table table-hover table-condensed table-bordered">
-          <thead>
-            <tr>
-              <th>Team</th>
-              <th>Time</th>
-              <th>Accept</th>
-              <th>Reject</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for request in pending_requests %}
-              <tr>
-                <td>{{ request.challenger.name }}</td>
-                <td>{{ request.create_time }}</td>
-                <td>
-                  <form style="margin: 0;" class="form-inline" action="{{ url_for('answer_request', request_id=request.id) }}", method="POST">
-                    <input type="hidden" name="action" value="accept" />
-                    <input type="submit" class="btn btn-mini btn-success" value="Accept">
-                  </form>
-                </td>
-                <td>
-                  <form style="margin: 0;" class="form-inline" action="{{ url_for('answer_request', request_id=request.id) }}", method="POST">
-                    <input type="hidden" name="action" value="reject" />
-                    <input type="submit" class="btn btn-mini btn-danger" value="Reject">
-                  </form>
-                </td>
-              </tr>
-            {% else %}
-              <tr>
-                <td colspan=4>
-                  When people of higher ELO challenge you, their requests will appear here.
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+        <div class="ui segments">
+          {% for request in pending_requests %}
+          <div class="ui segment">
+            <h3 class="ui header">
+              <div class="content">
+                {{ request.challenger.name }}
+                <div class="sub header">{{ request.create_time | naturaltime }}</div>
+              </div>
+              <div style="float: right;">
+                <form style="margin: 0; display: inline-block;" class="ui inline form" action="{{ url_for('answer_request', request_id=request.id) }}", method="POST">
+                  <input type="hidden" name="action" value="accept" />
+                  <button class="ui positive button">Accept</button>
+                </form>
+                <form style="margin: 0; display: inline-block;" class="ui inline form" action="{{ url_for('answer_request', request_id=request.id) }}", method="POST">
+                  <input type="hidden" name="action" value="reject" />
+                  <button class="ui negative button">Reject</button>
+                </form>
+              </div>
+            </h3>
+          </div>
+          {% else %}
+            <div class='ui segment'>
+              When people of higher ELO challenge you, their requests will appear here.
+            </div>
+          {% endfor %}
+        </div>
       </div>
     </div>
   </div>
+  <br />
+  {% with announce_title="Most Recent Announcement" %}
+    {% include '_announcements.html' %}
+  {% endwith %}
   {% include '_recent_games.html' %}
 {% endblock %}
