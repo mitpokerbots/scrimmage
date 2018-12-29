@@ -11,14 +11,18 @@
     </thead>
     <tbody>
       {% for game in recent_games %}
-        <tr>
+        <tr
+          {% if game.status.value == 'internal_error' %}
+            class="disabled"
+          {% endif %}
+        >
           <td
-            {% if game.challenger == game.winner %}class="positive"{% else %}class="negative"{% endif %}
+            {% if game.challenger == game.winner %}class="positive"{% elif game.opponent == game.winner %}class="negative"{% endif %}
           >
             {{ game.challenger.name }}
           </td>
           <td
-            {% if game.opponent == game.winner %}class="positive"{% else %}class="negative"{% endif %}
+            {% if game.opponent == game.winner %}class="positive"{% elif game.challenger == game.winner %}class="negative"{% endif %}
           >
             {{ game.opponent.name }}
           </td>

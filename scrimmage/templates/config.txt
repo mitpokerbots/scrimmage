@@ -38,13 +38,13 @@ DUPLICATE = false
 #   PLAYER_2_NAME = CHECKFOLDBOT
 
 PLAYER_1_TYPE = FOLDER 
-PLAYER_1_PATH = {{ challenger.path }}
+PLAYER_1_PATH = {{ bot_a.path }}
 PLAYER_1_SCONS_ARGS = 
-PLAYER_1_NAME = {{ challenger.name }}
+PLAYER_1_NAME = {{ bot_a.name }}
 PLAYER_1_RESET_KEYS = true
 
 PLAYER_2_TYPE = FOLDER 
-PLAYER_2_PATH = {{ opponent.path }}
+PLAYER_2_PATH = {{ bot_b.path }}
 PLAYER_2_SCONS_ARGS = 
-PLAYER_2_NAME = {{ opponent.name }}
+PLAYER_2_NAME = {{ bot_b.name }}
 PLAYER_2_RESET_KEYS = true

@@ -21,7 +21,8 @@ def index():
   
   teams = Team.query.filter(Team.is_disabled == False).all()
   challengeable_teams = [team for team in teams if team.can_be_challenged()]
-  challengeable_teams.append(g.team)
+  if not g.team.can_be_challenged():
+    challengeable_teams.append(g.team)
   return render_template('homepage.html',
                          challengeable_teams=challengeable_teams,
                          pending_requests=g.team.pending_requests(),

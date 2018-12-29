@@ -10,8 +10,10 @@ import jinja2
 from backports import tempfile
 
 from scrimmage import celery_app, app, db
-from scrimmage.models import Bot, Game, GameStatus
+from scrimmage.models import Bot, Game, Team, GameStatus
 from scrimmage.helpers import get_s3_object, put_s3_object
+
+from sqlalchemy.orm import raiseload
 
 ENGINE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'deps', 'engine.jar'))
 MAX_ZIP_SIZE = 10 * 1024 * 1024 * 1024
@@ -41,7 +43,7 @@ def _safe_name(name):
   return re.sub(r'[^a-z0-9_\-]', '-', name.lower())
 
 
-def _download_and_verify(player, bot, tmp_dir):
+def _download_and_verify(bot, tmp_dir):
   bot_dir = os.path.join(tmp_dir, os.urandom(10).encode('hex'))
   os.mkdir(bot_dir)
   bot_download_dir = os.path.join(bot_dir, 'download')
@@ -76,25 +78,32 @@ def _download_and_verify(player, bot, tmp_dir):
 
 def _get_winner(game_log):
   matches = re.search(r'FINAL: [^ ]+ \((-?\d+)\) [^ ]+ \((-?\d+)\)', game_log)
-  challenger_score = int(matches.group(1))
-  opponent_score = int(matches.group(2))
-  if challenger_score > opponent_score:
-    return 'challenger'
-  elif challenger_score < opponent_score:
-    return 'opponent'
+  bot_a_score = int(matches.group(1))
+  bot_b_score = int(matches.group(2))
+  if bot_a_score > bot_b_score:
+    return 'a'
+  elif bot_b_score < bot_a_score:
+    return 'b'
   else:
     return 'tie'
 
 
 K = 40
-def _elo(winner, loser):
-  wr = 10**(winner/400.0)
-  lr = 10**(loser/400.0)
+def _elo(team_a, team_b, winner):
+  maximum = max(team_a, team_b)
+  ar = 10**((team_a - maximum)/400.0)
+  br = 10**((team_b - maximum)/400.0)
 
-  e_w = wr/(wr + lr)
-  e_l = lr/(wr + lr)
+  expected_a = ar/(ar + br)
+  actual_a = 0.5 if winner == 'tie' else (1.0 if winner == 'a' else 0.0)
 
-  return (winner + (1.0 - e_w)*K, loser + (0.0 - e_l)*K)
+  expected_b = br/(ar + br)
+  actual_b = 0.5 if winner == 'tie' else (1.0 if winner == 'b' else 0.0)
+
+  new_a_elo = team_a + (actual_a - expected_a)*K
+  new_b_elo = team_b + (actual_b - expected_b)*K
+
+  return new_a_elo, new_b_elo
 
 
 def _finish_game(game, challenger, challenger_bot, opponent, opponent_bot, game_log, winner):
@@ -141,28 +150,17 @@ def _get_environment():
   return base
 
 
-def _play_game(game):
-  game.status = GameStatus.in_progress
-  db.session.commit()
-
-  challenger = game.challenger
-  challenger_bot = challenger.current_bot
-  challenger_name = "challenger_{}".format(_safe_name(game.challenger.name))
-
-  opponent = game.opponent
-  opponent_bot = opponent.current_bot
-  opponent_name = "opponent_{}".format(_safe_name(game.opponent.name))
-
+def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
   with tempfile.TemporaryDirectory() as tmp_dir:
-    valid_challenger_bot, challenger_path_or_msg = _download_and_verify(challenger, challenger_bot, tmp_dir)
-    if not valid_challenger_bot:
-      game_log = '{} lost since something went wrong: {}\n'.format(challenger_name, challenger_path_or_msg)
-      return _finish_game(game, challenger, challenger_bot, opponent, opponent_bot, game_log, 'opponent')
+    is_valid_a_bot, a_path = _download_and_verify(bot_a, tmp_dir)
+    is_valid_b_bot, b_path = _download_and_verify(bot_b, tmp_dir)
 
-    valid_opponent_bot, opponent_path_or_msg = _download_and_verify(opponent, opponent_bot, tmp_dir)
-    if not valid_opponent_bot:
-      game_log = '{} lost since something went wrong: {}\n'.format(opponent_name, opponent_path_or_msg)
-      return _finish_game(game, challenger, challenger_bot, opponent, opponent_bot, game_log, 'challenger')
+    if not is_valid_a_bot and not is_valid_b_bot:
+      return 'tie', 'Both bots are invalid, so the game is tied\n\n{}: {}\n{}: {}'.format(bot_a_name, a_path, bot_b_name, b_path)
+    elif not is_valid_a_bot:
+      return 'b', 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_a_name, bot_b_name, bot_a_name, a_path)
+    elif not is_valid_b_bot:
+      return 'a', 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_b_name, bot_a_name, bot_b_name, b_path)
 
     game_dir = os.path.join(tmp_dir, 'game')
     os.mkdir(game_dir)
@@ -170,13 +168,13 @@ def _play_game(game):
     with open(os.path.join(game_dir, 'config.txt'), 'w') as config_file:
       config_txt = render_template(
         'config.txt',
-        challenger={
-          'name': challenger_name,
-          'path': challenger_path_or_msg
+        bot_a={
+          'name': bot_a_name,
+          'path': a_path
         },
-        opponent={
-          'name': opponent_name,
-          'path': opponent_path_or_msg
+        bot_b={
+          'name': bot_b_name,
+          'path': b_path
         }
       )
       config_file.write(config_txt)
@@ -186,20 +184,80 @@ def _play_game(game):
     with open(os.path.join(game_dir, 'gamelog.txt'), 'r') as game_log_file:
       game_log = game_log_file.read()
 
-    winner = _get_winner(game_log)
+    return _get_winner(game_log), game_log
 
-    return _finish_game(game, challenger, challenger_bot, opponent, opponent_bot, game_log, winner)
+
+
+
+def _run_bots_and_upload(bot_a, bot_a_name, bot_b, bot_b_name):
+  winner, game_log = _run_bots(bot_a, bot_a_name, bot_b, bot_b_name)
+  log_key = os.path.join('logs', '{}_{}.txt'.format(int(time.time()), os.urandom(20).encode('hex')))
+  put_s3_object(log_key, game_log)
+  return winner, log_key
+
+
+
+def _multiple_with_for_update(cls, pks):
+  query = cls.query.options(raiseload('*')).filter(cls.id.in_(pks)).with_for_update()
+  results = query.all()
+  mapping = { result.id: result for result in results }
+  return tuple([mapping[pk] for pk in pks])
+
 
 
 @celery_app.task(ignore_result=True)
 def play_game_task(game_id):
   game = Game.query.get(game_id)
-  assert game.status == GameStatus.created
+  assert game.status == GameStatus.created or game.status == GameStatus.internal_error
+  game.status = GameStatus.in_progress
+  db.session.commit()
+
+  challenger = game.challenger
+  challenger_bot = challenger.current_bot
+  challenger_bot_id = challenger_bot.id
+  challenger_name = "challenger_{}".format(_safe_name(game.challenger.name))
+
+  opponent = game.opponent
+  opponent_bot = opponent.current_bot
+  opponent_bot_id = opponent_bot.id
+  opponent_name = "opponent_{}".format(_safe_name(game.opponent.name))
+
   try:
-    _play_game(game)
+    winner, log_key = _run_bots_and_upload(challenger_bot, challenger_name, opponent_bot, opponent_name)
+    db.session.expire_all()
+
+    # Reload stuff from DB.
+    game = Game.query.options(raiseload('*')).with_for_update().get(game_id)
+    challenger, opponent = _multiple_with_for_update(Team, [game.challenger_id, game.opponent_id])
+    challenger_bot, opponent_bot = _multiple_with_for_update(Bot, [challenger_bot_id, opponent_bot_id])
+
+    winner = 'ab'[ord(os.urandom(1)) % 2] if winner == 'tie' else winner
+
+    # Relevant database updates.
+    game.winner_id = challenger.id if winner == 'a' else opponent.id
+    game.loser_id = opponent.id if winner == 'a' else challenger.id
+    challenger.wins += int(winner == 'a')
+    challenger.losses += int(winner == 'b')
+    challenger_bot.wins += int(winner == 'a')
+    challenger_bot.losses += int(winner == 'b')
+    opponent.wins += int(winner == 'b')
+    opponent.losses += int(winner == 'a')
+    opponent_bot.wins += int(winner == 'b')
+    opponent_bot.losses += int(winner == 'a')
+    challenger.elo, opponent.elo = _elo(challenger.elo, opponent.elo, winner)
+
+    game.status = GameStatus.completed
+    game.completed_time = datetime.datetime.now()
+    game.log_s3_key = log_key
+
+    db.session.commit()
+
   except:
     db.session.rollback()
+    game = Game.query.get(game_id)
     game.status = GameStatus.internal_error
     db.session.commit()
     raise
+
+
 

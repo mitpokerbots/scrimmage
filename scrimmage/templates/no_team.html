@@ -18,7 +18,7 @@
           </div>
           <form class="ui inline form" action="{{ url_for('request_team') }}" method="POST">
             <div>
-              <select class="ui dropdown" name="team_id" style="display: inline-block; max-width: 50%">
+              <select class="ui dropdown {% if teams|length == 0 %}disabled{% endif %}" name="team_id" style="display: inline-block; max-width: 50%">
                 {% for team in teams|sort(attribute='name') %}
                   <option value='{{ team.id }}'>
                     {{ team.name }}
@@ -27,7 +27,7 @@
                   <option>No teams available to join</option>
                 {% endfor %}
               </select>
-              <button class="ui basic primary button" style="display: inline-block;">Request</button>
+              <button class="ui basic primary button {% if teams|length == 0 %}disabled{% endif %}" style="display: inline-block;">Request</button>
             </div>
           </form>
         </div>
