@@ -27,4 +27,5 @@ celery_app = make_celery(app)
 
 import scrimmage.user
 import scrimmage.admin
+import scrimmage.sponsor
 import scrimmage.tasks

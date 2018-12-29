@@ -1,0 +1,104 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<h1>Sponsor Access - {{ team.name }}</h1>
+
+<div>
+<a class="ui left labeled icon button" href="{{ url_for('sponsor_index') }}">
+  <i class="left arrow icon"></i>
+  Back
+</a>
+</div>
+<br />
+
+<div class="ui grid container">
+  <div class="eight wide column">
+    <h2>Manage</h2>
+    <div>
+      <h3>Statistics</h3>
+      <div class="ui four small statistics">
+        <div class="statistic">
+          <div class="value">
+            {{ team.elo|int }}
+          </div>
+          <div class="label">
+            ELO
+          </div>
+        </div>
+        <div class="green statistic">
+          <div class="value">
+            {{ team.wins }}
+          </div>
+          <div class="label">
+            Wins
+          </div>
+        </div>
+        <div class="red statistic">
+          <div class="value">
+            {{ team.losses }}
+          </div>
+          <div class="label">
+            Losses
+          </div>
+        </div>
+        <div class="statistic">
+          <div class="value">
+            {{ team.wins + team.losses }}
+          </div>
+          <div class="label">
+            Total Games
+          </div>
+        </div>
+      </div>
+    </div>
+    <h3>Teammates</h3>
+    <div>
+      <div class="ui segments">
+        {% for member in team.members %}
+          <div class="ui segment">
+            <h3 class="ui header">
+              <div class="content">
+                {{ member.kerberos }}@mit.edu
+              </div>
+            </h3>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="eight wide column">
+    <h2>Bots</h2>
+    <p>
+      Their current bot is highlighted below.
+    </p>
+    <table class="ui compact celled striped table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Wins</th>
+          <th>Losses</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for bot in team.bots|sort(attribute='create_time') %}
+          <tr{% if team.current_bot == bot %} class="positive"{% endif %}>
+            <td>{{ bot.name }}</td>
+            <td>{{ bot.wins }}</td>
+            <td>{{ bot.losses }}</td>
+            <td>{{ bot.create_time }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan=3>You don't have any bots! Upload one below.
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<br />
+
+{% include '_charts.html' %}
+
+{% endblock %}

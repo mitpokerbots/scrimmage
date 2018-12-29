@@ -1,4 +1,4 @@
-<div class="ui inverted huge menu" style="border-radius: 0">
+<div class="ui inverted menu" style="border-radius: 0">
   <div class="ui container">
     <a href="{{ url_for('index') }}" class="header item">
       <img class="logo" src="{{ url_for('static', filename='img/logo_clear.png') }}">
@@ -11,10 +11,12 @@
     {% endif %}
     {% if g.team %}
       <a href="{{ url_for('manage_team') }}" class="{% if request.endpoint == 'manage_team' %}active{% endif %} item">Manage Team</a>
+      <a href="{{ url_for('team_charts') }}" class="{% if request.endpoint == 'team_charts' %}active{% endif %} item">Charts</a>
       <a href="{{ url_for('show_games') }}" class="{% if request.endpoint == 'show_games' %}active{% endif %} item">Your Game Log</a>
     {% endif %}
     {% if g.is_admin %}
       <a href="{{ url_for('admin_index') }}" class="{% if request.endpoint == 'admin_index' %}active{% endif %} item">Admin</a>
+      <a href="{{ url_for('sponsor_index') }}" class="{% if request.endpoint == 'sponsor_index' %}active{% endif %} item">Sponsor</a>
     {% endif %}
     {% if g.is_logged_in %}
       <a href="{{ url_for('logout') }}" class="right item">

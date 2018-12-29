@@ -213,12 +213,12 @@ def play_game_task(game_id):
   db.session.commit()
 
   challenger = game.challenger
-  challenger_bot = challenger.current_bot
+  challenger_bot = game.challenger_bot
   challenger_bot_id = challenger_bot.id
   challenger_name = "challenger_{}".format(_safe_name(game.challenger.name))
 
   opponent = game.opponent
-  opponent_bot = opponent.current_bot
+  opponent_bot = game.opponent_bot
   opponent_bot_id = opponent_bot.id
   opponent_name = "opponent_{}".format(_safe_name(game.opponent.name))
 
@@ -244,6 +244,9 @@ def play_game_task(game_id):
     opponent.losses += int(winner == 'a')
     opponent_bot.wins += int(winner == 'b')
     opponent_bot.losses += int(winner == 'a')
+    
+    game.challenger_elo = challenger.elo
+    game.opponent_elo = opponent.elo
     challenger.elo, opponent.elo = _elo(challenger.elo, opponent.elo, winner)
 
     game.status = GameStatus.completed

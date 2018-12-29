@@ -1,4 +1,4 @@
-from flask import abort, session, g
+from flask import abort, session, g, Response, request
 from functools import wraps
 
 from scrimmage import app, db
@@ -80,3 +80,29 @@ def admin_required(f):
       abort(404)
     return f(*args, **kwargs)
   return decorated_function
+
+
+def _check_auth(username, password):
+  """This function is called to check if a username /
+  password combination is valid.
+  """
+  return username.lower() == 'sponsor' and password == settings['sponsor_portal_password']
+
+
+def _authenticate():
+  """Sends a 401 response that enables basic auth"""
+  return Response(
+    'Could not verify your access level for that URL.\n'
+    'You have to login with proper credentials', 401,
+    {'WWW-Authenticate': 'Basic realm="Login Required"'}
+  )
+
+
+def sponsor_or_admin_required(f):
+  @wraps(f)
+  def decorated(*args, **kwargs):
+    auth = request.authorization
+    if not g.is_admin and (not auth or not _check_auth(auth.username, auth.password)):
+      return _authenticate()
+    return f(*args, **kwargs)
+  return decorated

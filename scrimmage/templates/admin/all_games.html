@@ -69,10 +69,22 @@
             {{ game.friendly_status() }}
           </td>
           <td>{{ game.challenger.name }}</td>
-          <td>{{ game.challenger_elo|round }}</td>
+          <td>
+            {% if game.challenger_elo %}
+              {{ game.challenger_elo|round }}
+            {% else %}
+              N/A
+            {% endif %}
+          </td>
           <td>{{ game.challenger_bot.name }}</th>
           <td>{{ game.opponent.name }}</td>
-          <td>{{ game.opponent_elo|round }}</td>
+          <td>
+            {% if game.opponent_elo %}
+              {{ game.opponent_elo|round }}
+            {% else %}
+              N/A
+            {% endif %}
+          </td>
           <td>{{ game.opponent_bot.name }}</td>
           <td>{{ game.create_time }}</td>
           <td>

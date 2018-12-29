@@ -223,13 +223,9 @@ class Game(db.Model):
     self.game_request = game_request
     self.initiator = initiator
     self.challenger = game_request.challenger
-    self.opponent = game_request.opponent
-
     self.challenger_bot = self.challenger.current_bot
+    self.opponent = game_request.opponent
     self.opponent_bot = self.opponent.current_bot
-
-    self.challenger_elo = self.challenger.elo
-    self.opponent_elo = self.opponent.elo
 
     self.status = GameStatus.created
 

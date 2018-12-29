@@ -3,10 +3,12 @@ from scrimmage import app, db
 from scrimmage.models import AdminSetting
 
 DEFAULTS = {
-  'spawn_limit_per_team': '3',
+  'spawn_limit_per_team': '5',
   'maximum_team_size': '4',
-  'recent_games_to_show': '30',
+  'chart_granularity': '86400',
+  'recent_games_to_show': '20',
   'challenges_enabled': 'true',
+  'sponsor_portal_password': 'abc123',
   'extra_admins': ''
 }
 

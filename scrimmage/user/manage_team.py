@@ -6,8 +6,10 @@ from scrimmage import app, db
 from scrimmage.decorators import team_required
 from scrimmage.models import Bot, GameRequest, Game, GameStatus, TeamJoinRequest, Team, User
 from scrimmage.helpers import get_s3_object, put_s3_object
+from scrimmage.statistics import generate_team_stats
 
 from coolname import generate_slug
+from collections import namedtuple
 
 @app.route('/team')
 @team_required
@@ -90,3 +92,12 @@ def answer_join():
   db.session.commit()
   return redirect(url_for('manage_team'))
 
+
+
+@app.route('/team/charts')
+@team_required
+def team_charts():
+
+  elo_over_time, histogram_data = generate_team_stats(g.team)
+
+  return render_template('charts.html', elo_over_time=elo_over_time, histogram_data=histogram_data)
