@@ -113,7 +113,5 @@ def answer_join():
 @app.route('/team/charts')
 @team_required
 def team_charts():
-
   elo_over_time, histogram_data = generate_team_stats(g.team)
-
   return render_template('charts.html', elo_over_time=elo_over_time, histogram_data=histogram_data)

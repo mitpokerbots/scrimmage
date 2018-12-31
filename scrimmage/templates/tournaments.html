@@ -1,0 +1,107 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <h1>Tournaments</h1>
+
+  {% for tournament in tournaments %}
+    <div class="ui segment {% if tournament.is_in_progress() %}green{% endif %}">
+      <h3 class="ui dividing header">
+        {{ tournament.title }}
+        <div class="sub header">
+          {{ tournament.create_time | naturaltime }}
+        </div>
+      </h3>
+      <div class="ui stackable divided grid container">
+        <div class="row">
+          <div class="ui six wide column">
+            <div class="ui two small statistics">
+              <div class="statistic">
+                <div class="value">
+                  {{ tournament.participants|length }}
+                </div>
+                <div class="label">
+                  Participants
+                </div>
+              </div>
+              <div class="statistic">
+                <div class="value">
+                  {{ tournament.games_per_pair }}
+                </div>
+                <div class="label">
+                  Games/Pair
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ui ten wide column">
+            <div class="ui {% if tournament.state() == 'done' %} success {% endif %} progress" data-percent="{{ tournament.progress() }}">
+              <div class="bar"></div>
+              <div class="label">
+                {% if tournament.state() == 'done' %}
+                  Done!
+                {% elif tournament.state() == 'finalize' %}
+                  Finalizing...
+                {% else %}
+                  {{ tournament.num_games_running() }} games running. At least {{ tournament.num_games_queued() }} to go.
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="ui sixteen wide column">
+            <table class="ui celled striped table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>ELO</th>
+                  <th>Wins</th>
+                  <th>Losses</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for bot in tournament.participants|sort(attribute='elo', reverse=True) %}
+                  <tr{% if g.team == bot.bot.team %} class='active'{% endif %}>
+                    <td>{{ bot.bot.team.name }}</td>
+                    <td style="text-align: center">
+                      <div class="ui mini statistic">
+                        <div class="value">
+                          {{ bot.elo | int }}
+                        </div>
+                      </div>
+                    </td>
+                    <td style="text-align: center">
+                      <div class="ui mini green statistic">
+                        <div class="value">
+                          {{ bot.wins }}
+                        </div>
+                      </div>
+                    </td>
+                    <td style="text-align: center">
+                      <div class="ui mini red statistic">
+                        <div class="value">
+                          {{ bot.losses }}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <p>
+      There are no tournaments yet. Check back later!
+    </p>
+  {% endfor %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  $('.progress').progress();
+</script>
+{% endblock %}

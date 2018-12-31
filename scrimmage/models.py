@@ -245,3 +245,106 @@ class Game(db.Model):
     assert self.status == GameStatus.created
     from scrimmage.tasks import play_game_task
     play_game_task.delay(self.id)
+
+
+class Tournament(db.Model):
+  __tablename__ = "tournaments"
+  id = db.Column(db.Integer, primary_key=True)
+  title = db.Column(db.String(256))
+  create_time = db.Column(db.DateTime, default=db.func.now())
+
+  games_per_pair = db.Column(db.Integer, default=100)
+
+  participants = db.relationship("TournamentBot", back_populates="tournament")
+  games = db.relationship("TournamentGame", back_populates="tournament")
+
+  def __init__(self, title, games_per_pair):
+    self.title = title
+    self.games_per_pair = games_per_pair
+
+
+  def _num_games_with_status(self, status):
+    return TournamentGame.query.filter(TournamentGame.status == status).filter(TournamentGame.tournament == self).count()
+
+  def num_games_running(self):
+    return self._num_games_with_status(GameStatus.in_progress)
+
+  def num_games_queued(self):
+    return self._num_games_with_status(GameStatus.created)
+
+  def num_games_completed(self):
+    return self._num_games_with_status(GameStatus.completed)
+
+  def num_games_errored(self):
+    return self._num_games_with_status(GameStatus.internal_error)
+
+  def is_in_progress(self):
+    return self.num_games_queued() != 0
+
+  def progress(self):
+    queued_games = self.num_games_queued()
+    completed_games = self.num_games_completed()
+    return float(completed_games)/(completed_games + queued_games)*100
+
+  def state(self):
+    if self.num_games_queued() > 0:
+      return 'progress'
+    elif self.num_games_errored() > 0:
+      return 'finalize'
+    else:
+      return 'done'
+
+
+
+class TournamentBot(db.Model):
+  __tablename__ = "tournament_bots"
+  id = db.Column(db.Integer, primary_key=True)
+  elo = db.Column(db.Float)
+  wins = db.Column(db.Integer)
+  losses = db.Column(db.Integer)
+
+  bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False)
+  bot = db.relationship("Bot")
+
+  tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
+  tournament = db.relationship("Tournament", back_populates="")
+
+  def __init__(self, bot, tournament):
+    self.wins = 0
+    self.losses = 0
+    self.elo = 1500.0
+    self.bot = bot
+    self.tournament = tournament
+
+
+class TournamentGame(db.Model):
+  __tablename__ = "tournament_games"
+  id = db.Column(db.Integer, primary_key=True)
+
+  tournament_id = db.Column(db.Integer, db.ForeignKey('tournaments.id'), nullable=False)
+  tournament = db.relationship("Tournament", back_populates="games")
+
+  bot_a_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'), nullable=False)
+  bot_a = db.relationship("TournamentBot", foreign_keys=bot_a_id)
+  bot_a_elo = db.Column(db.Float) # Used just for statistics afterwards
+  bot_b_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'), nullable=False)
+  bot_b = db.relationship("TournamentBot", foreign_keys=bot_b_id)
+  bot_b_elo = db.Column(db.Float)   # Same as above
+
+  winner_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'))
+  winner = db.relationship("TournamentBot", foreign_keys=winner_id)
+  loser_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'))
+  loser = db.relationship("TournamentBot", foreign_keys=loser_id)
+
+  status = db.Column(db.Enum(GameStatus), nullable=False)
+
+  create_time = db.Column(db.DateTime, default=db.func.now())
+  completed_time = db.Column(db.DateTime)
+
+  def __init__(self, tournament, bot_a, bot_b):
+    self.tournament = tournament
+    self.bot_a = bot_a
+    self.bot_b = bot_b
+    self.status = GameStatus.created
+
+

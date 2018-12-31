@@ -2,7 +2,7 @@
 
 {% block content %}
   <h1>{{ g.team.name }}</h1>
-  <div class="ui grid container">
+  <div class="ui stackable grid container">
     <div class="eight wide column">
       <h2>Manage</h2>
       <div>
@@ -143,20 +143,24 @@
       </table>
       {% if g.team.bots|length > 0 %}
         <form class="ui inline form" action="{{ url_for('set_bot') }}" method="POST">
-          <div class="two fields">
-            <div class="field">
-              <label>Set bot</label>
-              <select class="ui dropdown" name="bot_id">
-                {% for bot in g.team.bots|sort(attribute='create_time') %}
-                  <option value='{{ bot.id }}' {% if g.team.current_bot == bot %}selected{% endif %}>
-                    {{ bot.name }}
-                  </option>
-                {% endfor %}
-              </select>
+          <div class="ui stackable grid container">
+            <div class="twelve wide column">
+              <div class="field">
+                <label>Set bot</label>
+                <select class="ui dropdown" name="bot_id">
+                  {% for bot in g.team.bots|sort(attribute='create_time') %}
+                    <option value='{{ bot.id }}' {% if g.team.current_bot == bot %}selected{% endif %}>
+                      {{ bot.name }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
             </div>
-            <div class="field">
-              <label>&nbsp;</label>
-              <button class="ui primary button">Set</button>
+            <div class="four wide column">
+              <div class="field">
+                <label>&nbsp;</label>
+                <button class="ui fluid primary button">Set</button>
+              </div>
             </div>
           </div>
         </form>

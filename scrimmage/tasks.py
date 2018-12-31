@@ -10,7 +10,7 @@ import jinja2
 from backports import tempfile
 
 from scrimmage import celery_app, app, db
-from scrimmage.models import Bot, Game, Team, GameStatus
+from scrimmage.models import Bot, Game, Team, GameStatus, TournamentGame, TournamentBot
 from scrimmage.helpers import get_s3_object, put_s3_object
 from scrimmage.settings import settings
 
@@ -108,42 +108,6 @@ def _elo(team_a, team_b, winner):
   new_b_elo = team_b + (actual_b - expected_b)*K
 
   return new_a_elo, new_b_elo
-
-
-def _finish_game(game, challenger, challenger_bot, opponent, opponent_bot, game_log, winner):
-  log_key = os.path.join('logs', '{}_{}_{}.txt'.format(challenger.id, opponent.id, os.urandom(10).encode('hex')))
-  put_s3_object(log_key, game_log)
-
-  ### CRITICAL SECTION STARTS HERE
-  ### if you do add a lock here, make sure to use a context manager or similar, since something could
-  ### cause an exception during this section and the lock would never get released.
-  db.session.expire_all()
-
-  challenger_won = bool(ord(os.urandom(1)) % 2) if winner == 'tie' else (True if winner == 'challenger' else False)
-
-  if challenger_won:
-    game.winner = challenger
-    game.loser = opponent
-    challenger.wins += 1
-    challenger_bot.wins += 1
-    opponent.losses += 1
-    opponent_bot.losses += 1
-    challenger.elo, opponent.elo = _elo(challenger.elo, opponent.elo)
-  else:
-    game.winner = opponent
-    game.loser = challenger
-    opponent.wins += 1
-    opponent_bot.wins += 1
-    challenger.losses += 1
-    challenger_bot.losses += 1
-    opponent.elo, challenger.elo = _elo(opponent.elo, challenger.elo)
-
-  game.status = GameStatus.completed
-  game.completed_time = datetime.datetime.now()
-  game.log_s3_key = log_key
-
-  db.session.commit()
-  ### CRITICAL SECTION ENDS HERE
 
 
 def _get_environment():
@@ -305,3 +269,49 @@ def play_game_task(game_id):
 
 
 
+@celery_app.task(ignore_result=True)
+def play_tournament_game_task(tournament_game_id):
+  game = TournamentGame.query.get(tournament_game_id)
+  assert game.status == GameStatus.created or game.status == GameStatus.internal_error
+  game.status = GameStatus.in_progress
+  db.session.commit()
+
+  tournament_bot_a = game.bot_a
+  bot_a = tournament_bot_a.bot
+
+  tournament_bot_b = game.bot_b
+  bot_b = tournament_bot_b.bot
+
+  try:
+    winner, _, _, _ = _run_bots(bot_a, "A", bot_b, "B")
+    db.session.expire_all()
+
+    # Reload stuff from DB.
+    game = TournamentGame.query.options(raiseload('*')).with_for_update().get(tournament_game_id)
+    tournament_bot_a, tournament_bot_b = _multiple_with_for_update(TournamentBot, [game.bot_a_id, game.bot_b_id])
+
+    winner = 'ab'[ord(os.urandom(1)) % 2] if winner == 'tie' else winner
+
+    # Relevant database updates.
+    game.winner_id = tournament_bot_a.id if winner == 'a' else tournament_bot_b.id
+    game.loser_id = tournament_bot_b.id if winner == 'a' else tournament_bot_a.id
+    tournament_bot_a.wins += int(winner == 'a')
+    tournament_bot_a.losses += int(winner == 'b')
+    tournament_bot_b.wins += int(winner == 'b')
+    tournament_bot_b.losses += int(winner == 'a')
+    
+    game.bot_a_elo = tournament_bot_a.elo
+    game.bot_b_elo = tournament_bot_b.elo
+    tournament_bot_a.elo, tournament_bot_b.elo = _elo(tournament_bot_a.elo, tournament_bot_b.elo, winner)
+
+    game.status = GameStatus.completed
+    game.completed_time = datetime.datetime.now()
+
+    db.session.commit()
+
+  except:
+    db.session.rollback()
+    game = TournamentGame.query.get(tournament_game_id)
+    game.status = GameStatus.internal_error
+    db.session.commit()
+    raise

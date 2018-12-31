@@ -73,7 +73,7 @@
           <td>{{ game.challenger.name }}</td>
           <td>
             {% if game.challenger_elo %}
-              {{ game.challenger_elo|round }}
+              {{ game.challenger_elo|int }}
             {% else %}
               N/A
             {% endif %}
@@ -82,7 +82,7 @@
           <td>{{ game.opponent.name }}</td>
           <td>
             {% if game.opponent_elo %}
-              {{ game.opponent_elo|round }}
+              {{ game.opponent_elo|int }}
             {% else %}
               N/A
             {% endif %}

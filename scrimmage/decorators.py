@@ -106,3 +106,13 @@ def sponsor_or_admin_required(f):
       return _authenticate()
     return f(*args, **kwargs)
   return decorated
+
+
+def sponsor_or_team_required(f):
+  @wraps(f)
+  def decorated(*args, **kwargs):
+    auth = request.authorization
+    if g.team is None and (not auth or not _check_auth(auth.username, auth.password)):
+      return _authenticate()
+    return f(*args, **kwargs)
+  return decorated

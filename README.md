@@ -23,3 +23,10 @@ Production
 2. Rename them and get rid of the `-template`
 3. Fill them in with the correct config values
 4. Run the scripts to run them in production
+
+
+
+Development
+-----------
+
+When you add new database features, do `python manage.py db migrate` and `python manage.py db upgrade`.

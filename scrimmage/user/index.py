@@ -1,8 +1,8 @@
 from flask import render_template, g, url_for, redirect, request
 
 from scrimmage import app, db
-from scrimmage.models import User, Team, TeamJoinRequest, GameRequest, GameRequestStatus, Game, Announcement
-from scrimmage.decorators import login_required, team_required, set_flash
+from scrimmage.models import User, Team, TeamJoinRequest, GameRequest, GameRequestStatus, Game, Announcement, Tournament
+from scrimmage.decorators import login_required, team_required, set_flash, sponsor_or_team_required
 
 @app.route('/')
 def index():
@@ -120,3 +120,10 @@ def answer_request(request_id):
     else:
       set_flash("Could not accept the game request, since you have too many games currently running. Please wait a little bit", level='warning')
   return redirect(url_for('index'))
+
+
+@app.route('/tournaments')
+@sponsor_or_team_required
+def show_tournaments():
+  tournaments = Tournament.query.order_by(Tournament.create_time.desc()).all()
+  return render_template('tournaments.html', tournaments=tournaments)
