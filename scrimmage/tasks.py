@@ -179,7 +179,11 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
         bot_b={
           'name': bot_b_name,
           'path': b_path
-        }
+        },
+        game_big_blind=int(settings['game_big_blind']),
+        game_starting_stack=int(settings['game_starting_stack']),
+        game_num_hands=int(settings['game_num_hands']),
+        game_time_restriction=int(settings['game_time_restriction'])
       )
       config_file.write(config_txt)
 

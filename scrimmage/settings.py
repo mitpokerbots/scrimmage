@@ -10,7 +10,11 @@ DEFAULTS = {
   'challenges_enabled': 'true',
   'sponsor_portal_password': 'abc123',
   'extra_admins': '',
-  'maximum_player_log_file_size': '10485760' # 10*1024*1024
+  'maximum_player_log_file_size': '10485760', # 10*1024*1024
+  'game_big_blind': '2',
+  'game_starting_stack': '200',
+  'game_num_hands': '1000',
+  'game_time_restriction': '100'
 }
 
 class SettingsClass(object):
