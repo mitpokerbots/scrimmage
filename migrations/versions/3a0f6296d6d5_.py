@@ -1,4 +1,4 @@
-"""empty message
+"""Add announcements table
 
 Revision ID: 3a0f6296d6d5
 Revises: 8e77bf12d068

@@ -12,6 +12,7 @@ from backports import tempfile
 from scrimmage import celery_app, app, db
 from scrimmage.models import Bot, Game, Team, GameStatus
 from scrimmage.helpers import get_s3_object, put_s3_object
+from scrimmage.settings import settings
 
 from sqlalchemy.orm import raiseload
 
@@ -40,7 +41,10 @@ def _verify_zip(zip_file_path):
 
 
 def _safe_name(name):
-  return re.sub(r'[^a-z0-9_\-]', '-', name.lower())
+  name = re.sub(r'[^a-z0-9_\-]', '-', name.lower())
+  if name == '':
+    return "player-" + os.urandom(4).encode('hex')
+  return name
 
 
 def _download_and_verify(bot, tmp_dir):
@@ -156,11 +160,11 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
     is_valid_b_bot, b_path = _download_and_verify(bot_b, tmp_dir)
 
     if not is_valid_a_bot and not is_valid_b_bot:
-      return 'tie', 'Both bots are invalid, so the game is tied\n\n{}: {}\n{}: {}'.format(bot_a_name, a_path, bot_b_name, b_path)
+      return 'tie', 'Both bots are invalid, so the game is tied\n\n{}: {}\n{}: {}'.format(bot_a_name, a_path, bot_b_name, b_path), None, None
     elif not is_valid_a_bot:
-      return 'b', 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_a_name, bot_b_name, bot_a_name, a_path)
+      return 'b', 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_a_name, bot_b_name, bot_a_name, a_path), None, None
     elif not is_valid_b_bot:
-      return 'a', 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_b_name, bot_a_name, bot_b_name, b_path)
+      return 'a', 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_b_name, bot_a_name, bot_b_name, b_path), None, None
 
     game_dir = os.path.join(tmp_dir, 'game')
     os.mkdir(game_dir)
@@ -184,16 +188,47 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
     with open(os.path.join(game_dir, 'gamelog.txt'), 'r') as game_log_file:
       game_log = game_log_file.read()
 
-    return _get_winner(game_log), game_log
+    player_log_filesize = int(settings['maximum_player_log_file_size'])
 
+    bot_a_log_filename = os.path.join(game_dir, '{}.dump'.format(bot_a_name))
+    if os.path.isfile(bot_a_log_filename):
+      with open(bot_a_log_filename, 'r') as bot_a_log_file:
+        bot_a_log = bot_a_log_file.read(player_log_filesize)
+    else:
+      bot_a_log = None
+
+    bot_b_log_filename = os.path.join(game_dir, '{}.dump'.format(bot_b_name))
+    if os.path.isfile(bot_b_log_filename):
+      with open(bot_a_log_filename, 'r') as bot_b_log_file:
+        bot_b_log = bot_b_log_file.read(player_log_filesize)
+    else:
+      bot_b_log = None
+
+    return _get_winner(game_log), game_log, bot_a_log, bot_b_log
 
 
 
 def _run_bots_and_upload(bot_a, bot_a_name, bot_b, bot_b_name):
-  winner, game_log = _run_bots(bot_a, bot_a_name, bot_b, bot_b_name)
-  log_key = os.path.join('logs', '{}_{}.txt'.format(int(time.time()), os.urandom(20).encode('hex')))
-  put_s3_object(log_key, game_log)
-  return winner, log_key
+  winner, game_log, bot_a_log, bot_b_log = _run_bots(bot_a, bot_a_name, bot_b, bot_b_name)
+
+  log_key_base = os.path.join('logs', '{}_{}'.format(int(time.time()), os.urandom(20).encode('hex')))
+
+  gamelog_key = os.path.join(log_key_base, 'gamelog.txt')
+  put_s3_object(gamelog_key, game_log)
+
+  if bot_a_log is not None:
+    bot_a_log_key = os.path.join(log_key_base, 'bot_a.txt')
+    put_s3_object(bot_a_log_key, bot_a_log)
+  else:
+    bot_a_log_key = None
+
+  if bot_b_log is not None:
+    bot_b_log_key = os.path.join(log_key_base, 'bot_b.txt')
+    put_s3_object(bot_b_log_key, bot_b_log)
+  else:
+    bot_b_log_key = None
+
+  return winner, gamelog_key, bot_a_log_key, bot_b_log_key
 
 
 
@@ -223,7 +258,7 @@ def play_game_task(game_id):
   opponent_name = "opponent_{}".format(_safe_name(game.opponent.name))
 
   try:
-    winner, log_key = _run_bots_and_upload(challenger_bot, challenger_name, opponent_bot, opponent_name)
+    winner, log_key, challenger_log_key, opponent_log_key = _run_bots_and_upload(challenger_bot, challenger_name, opponent_bot, opponent_name)
     db.session.expire_all()
 
     # Reload stuff from DB.
@@ -252,6 +287,8 @@ def play_game_task(game_id):
     game.status = GameStatus.completed
     game.completed_time = datetime.datetime.now()
     game.log_s3_key = log_key
+    game.challenger_log_s3_key = challenger_log_key
+    game.opponent_log_s3_key = opponent_log_key
 
     db.session.commit()
 

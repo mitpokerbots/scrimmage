@@ -9,7 +9,8 @@ DEFAULTS = {
   'recent_games_to_show': '20',
   'challenges_enabled': 'true',
   'sponsor_portal_password': 'abc123',
-  'extra_admins': ''
+  'extra_admins': '',
+  'maximum_player_log_file_size': '10485760' # 10*1024*1024
 }
 
 class SettingsClass(object):

@@ -1,4 +1,4 @@
-"""empty message
+"""Initial database
 
 Revision ID: 8e77bf12d068
 Revises: 

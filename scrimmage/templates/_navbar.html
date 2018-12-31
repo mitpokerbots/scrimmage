@@ -12,7 +12,7 @@
     {% if g.team %}
       <a href="{{ url_for('manage_team') }}" class="{% if request.endpoint == 'manage_team' %}active{% endif %} item">Manage Team</a>
       <a href="{{ url_for('team_charts') }}" class="{% if request.endpoint == 'team_charts' %}active{% endif %} item">Charts</a>
-      <a href="{{ url_for('show_games') }}" class="{% if request.endpoint == 'show_games' %}active{% endif %} item">Your Game Log</a>
+      <a href="{{ url_for('show_games') }}" class="{% if request.endpoint == 'show_games' %}active{% endif %} item">Your Games</a>
     {% endif %}
     {% if g.is_admin %}
       <a href="{{ url_for('admin_index') }}" class="{% if request.endpoint == 'admin_index' %}active{% endif %} item">Admin</a>

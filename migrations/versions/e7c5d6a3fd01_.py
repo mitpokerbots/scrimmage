@@ -1,4 +1,4 @@
-"""empty message
+"""Add create time and title to announcements table
 
 Revision ID: e7c5d6a3fd01
 Revises: 3a0f6296d6d5

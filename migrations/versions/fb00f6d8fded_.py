@@ -1,4 +1,4 @@
-"""empty message
+"""Add team join requests table
 
 Revision ID: fb00f6d8fded
 Revises: e7c5d6a3fd01

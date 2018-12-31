@@ -61,5 +61,21 @@ def admin_all_games():
 @admin_required
 def admin_game_log(game_id):
   game = Game.query.get(game_id)
-  assert game.status == GameStatus.completed
+  assert game.log_s3_key is not None
   return send_file(get_s3_object(game.log_s3_key), mimetype="text/plain")
+
+
+@app.route('/admin/game/<int:game_id>/challenger_log')
+@admin_required
+def admin_challenger_log(game_id):
+  game = Game.query.get(game_id)
+  assert game.challenger_log_s3_key is not None
+  return send_file(get_s3_object(game.challenger_log_s3_key), mimetype="text/plain")
+
+
+@app.route('/admin/game/<int:game_id>/opponent_log')
+@admin_required
+def admin_opponent_log(game_id):
+  game = Game.query.get(game_id)
+  assert game.opponent_log_s3_key is not None
+  return send_file(get_s3_object(game.opponent_log_s3_key), mimetype="text/plain")

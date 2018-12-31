@@ -4,18 +4,17 @@ MIT Pokerbots Scrimmage Server, released under the MIT License
 
 To run locally, do:
 
-- `brew install rabbitmq`
+- `brew install rabbitmq scons boost`
 - `pip install -r requirements.txt`
-- `brew install scons`
-- `brew install boost`
+- `python manage.py db upgrade`
 
 then do
 
 To run the server and worker, run in three separate tabs:
 
 - `rabbitmq-server`
-- `python runserver.py`
-- `celery -A scrimmage.celery_app worker --loglevel=info`
+- `python manage.py runserver`
+- `celery -A scrimmage.celery_app worker --loglevel=info --concurrency=1`
 
 Production
 ----------

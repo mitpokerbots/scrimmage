@@ -1,6 +1,6 @@
 import os
 
-from flask import g, redirect, render_template, request, url_for, send_file
+from flask import g, redirect, render_template, request, url_for, send_file, Response
 
 from scrimmage import app, db
 from scrimmage.decorators import team_required
@@ -26,13 +26,29 @@ def show_games():
   return render_template('show_games.html', pagination=pagination)
 
 
-@app.route('/team/game/<int:game_id>/log')
+@app.route('/team/game/<int:game_id>/game_log')
 @team_required
 def game_log(game_id):
   game = Game.query.get(game_id)
   assert game.status == GameStatus.completed
   assert game.opponent == g.team or game.challenger == g.team
   return send_file(get_s3_object(game.log_s3_key), mimetype="text/plain")
+
+
+@app.route('/team/game/<int:game_id>/player_log')
+@team_required
+def player_log(game_id):
+  game = Game.query.get(game_id)
+  assert game.opponent == g.team or game.challenger == g.team
+  if game.challenger == g.team:
+    key = game.challenger_log_s3_key
+  else:
+    key = game.opponent_log_s3_key
+
+  if not key:
+    return Response("No player log available.", mimetype='text/plain')
+
+  return send_file(get_s3_object(key), mimetype="text/plain")
 
 
 @app.route('/team/create_bot', methods=['POST'])

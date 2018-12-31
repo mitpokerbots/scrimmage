@@ -209,6 +209,8 @@ class Game(db.Model):
   loser_id = db.Column(db.Integer, db.ForeignKey('teams.id'))
 
   log_s3_key = db.Column(db.String(256))
+  challenger_log_s3_key = db.Column(db.String(256))
+  opponent_log_s3_key = db.Column(db.String(256))
 
   game_request = db.relationship("GameRequest")
   initiator = db.relationship("Team", foreign_keys=initiator_id)
