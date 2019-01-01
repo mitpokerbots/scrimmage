@@ -3,14 +3,13 @@ import os
 # Note, it's very important that keys read from the environment have the same name as in the config
 
 class Config(object):
-  DEBUG = False
-  TESTING = False
   SQLALCHEMY_DATABASE_URI = 'sqlite://:memory:'
   SQLALCHEMY_TRACK_MODIFICATIONS = False
   AUTH_URL_BASE = 'https://jserrino.scripts.mit.edu:444/auth/auth.php'
   MAX_CONTENT_LENGTH = 3 * 1024 * 1024 * 1024
 
 class ProdConfig(Config):
+  ENV = 'production'
   SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI', None)
   CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', None)
   SECRET_KEY = os.getenv('SECRET_KEY', None)
@@ -20,6 +19,7 @@ class ProdConfig(Config):
   S3_BUCKET = 'pokerbots-prod'
 
 class DevConfig(Config):
+  ENV = 'development'
   DEBUG = True
   SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(os.path.dirname(__file__), '..', 'dev.db')
   SQLALCHEMY_TRACK_MODIFICATIONS = True

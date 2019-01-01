@@ -35,6 +35,7 @@ def login():
   else:
     return redirect(_create_redirect())
 
+
 @app.route('/login/return')
 def login_return():
   success, err_msg = _verify_token(request.args['email'],
