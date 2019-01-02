@@ -3,12 +3,14 @@ from celery import Celery
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from flask_sslify import SSLify
 
 app = Flask(__name__)
 config_object_str = 'scrimmage.config.ProdConfig' if os.environ.get('PRODUCTION', False) else 'scrimmage.config.DevConfig'
 app.config.from_object(config_object_str)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+sslify = SSLify(app)
 
 def make_celery(flask_app):
     celery = Celery(flask_app.import_name, broker=flask_app.config['CELERY_BROKER_URL'])

@@ -14,9 +14,11 @@ class ProdConfig(Config):
   CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', None)
   SECRET_KEY = os.getenv('SECRET_KEY', None)
   AUTH_KEY = os.getenv('AUTH_KEY', None)
-  SERVER_NAME = 'scrimmage.mitpokerbots.com'
+  AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', None)
+  AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', None)
+  S3_REGION = os.getenv('S3_REGION', None)
+  S3_BUCKET = os.getenv('S3_BUCKET', None)
   PREFERRED_URL_SCHEME = 'https'
-  S3_BUCKET = 'pokerbots-prod'
 
 class DevConfig(Config):
   ENV = 'development'
@@ -24,7 +26,6 @@ class DevConfig(Config):
   SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(os.path.dirname(__file__), '..', 'dev.db')
   SQLALCHEMY_TRACK_MODIFICATIONS = True
   SECRET_KEY = 'SUPER SECRET KEY'
-  SERVER_NAME = 'localhost:5000'
   PREFERRED_URL_SCHEME = 'http'
   S3_BUCKET = 'pokerbots-dev'
   CELERY_BROKER_URL = 'pyamqp://guest@localhost//'
