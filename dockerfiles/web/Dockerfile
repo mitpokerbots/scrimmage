@@ -1,11 +1,14 @@
 FROM python:2.7-slim
 
+RUN useradd -ms /bin/bash web
+USER web
+
 # copy only the files needed for pip install
-COPY requirements.txt /app/requirements.txt
+COPY requirements.txt /home/web/requirements.txt
 RUN pip install --upgrade pip
-RUN pip install -r /app/requirements.txt
+RUN pip install -r /home/web/requirements.txt
 
 # copy the rest of the app
-COPY . /app
+COPY . /home/web
 
-WORKDIR /app
+WORKDIR /home/web
