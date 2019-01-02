@@ -9,7 +9,7 @@ def _get_s3_context():
   else:
     return boto3.client(
       's3',
-      region=app.config['S3_REGION'],
+      region_name=app.config['S3_REGION'],
       aws_access_key_id=app.config['AWS_ACCESS_KEY_ID'],
       aws_secret_access_key=app.config['AWS_SECRET_ACCESS_KEY'],
       config=Config(signature_version='s3v4')

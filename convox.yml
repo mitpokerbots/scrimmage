@@ -11,7 +11,6 @@ services:
       - CELERY_BROKER_URL
       - SECRET_KEY
       - AUTH_KEY
-      - SERVER_NAME=scrimmage.pokerbots.org
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY
       - S3_REGION
@@ -28,7 +27,6 @@ services:
       - CELERY_BROKER_URL
       - SECRET_KEY
       - AUTH_KEY
-      - SERVER_NAME=scrimmage.pokerbots.org
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY
       - S3_REGION
