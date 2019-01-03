@@ -1,9 +1,0 @@
-export LD_LIBRARY_PATH=/home/ubuntu/pbots_calc/export/linux2/lib:$LD_LIBRARY_PATH
-export PYTHONPATH=/home/ubuntu/pbots_calc/python:$PYTHONPATH
-export PRODUCTION=1
-export SQLALCHEMY_DATABASE_URI='' # DATABASE URI (must include username and password, as well as protocol)
-export CELERY_BROKER_URL=''              # prolly something like pyamqp://user:pass@location/
-export SECRET_KEY=''  # longish random string
-export AUTH_KEY=''        # Get this from someone (prolly jack)
-
-celery -A scrimmage.celery_app worker --loglevel=info
