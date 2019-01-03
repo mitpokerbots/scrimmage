@@ -12,7 +12,13 @@ RUN pip install -r /home/worker/requirements-worker.txt
 
 ENV DEBIAN_FRONTEND noninteractive
 
-RUN apt-get install -yq gcc scons libpoker-eval autoconf libtool git default-jdk
+RUN apt-get update
+RUN apt-get upgrade
+RUN apt-get install -yq gcc scons libpoker-eval autoconf libtool git openjdk-8-jdk
+
+COPY ./deps/pbots_calc/libpbots_calc.so /usr/lib/libpbots_calc.so
+COPY ./deps/pbots_calc/pbots_calc.h /usr/include/pbots_calc.h
+COPY ./deps/pbots_calc/pbots_calc.py /usr/local/lib/python2.7/site-packages/pbots_calc.py
 
 USER worker
 
