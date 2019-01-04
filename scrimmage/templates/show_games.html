@@ -45,6 +45,8 @@
         <th>Creation Time</th>
         <th>Your bot</th>
         <th>Status</th>
+        <th>C. Score</th>
+        <th>O. Score</th>
         <th>Winner</th>
         <th>Game Log</th>
         <th>Player Log</th>
@@ -93,12 +95,15 @@
             {% endif %}
           </td>
           <td>{{ game.friendly_status() }}</td>
+          <td>{{ game.challenger_score }}</td>
+          <td>{{ game.opponent_score }}</td>
           <td>
             {% if game.status.value == 'completed' %}
               {{ game.winner.name }}
             {% else %}
               N/A
             {% endif %}
+          </td>
           <td>
             {% if game.log_s3_key is not none %}
               <a href="{{ url_for('game_log', game_id=game.id) }}">Log</a>

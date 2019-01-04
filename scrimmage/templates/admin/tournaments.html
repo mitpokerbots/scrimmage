@@ -12,7 +12,14 @@
 
   {% for tournament in tournaments %}
     <div class="ui segments">
-      <div class="ui segment {% if tournament.is_in_progress() %}green{% endif %}">
+      <div class="ui segment
+        {% if tournament.status.value == 'created' %}
+          black
+        {% elif tournament.status.value == 'spawning' %}
+          yellow
+        {% elif tournament.is_in_progress() %}
+          green
+        {% endif %}">
         <h3 class="ui dividing header">
           {{ tournament.title }}
           <div class="sub header">

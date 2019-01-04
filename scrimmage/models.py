@@ -199,6 +199,8 @@ class Game(db.Model):
   opponent_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
   challenger_elo = db.Column(db.Float) # Used just for statistics afterwards
   opponent_elo = db.Column(db.Float)   # Same as above
+  challenger_score = db.Column(db.Integer)
+  opponent_score = db.Column(db.Integer)
   create_time = db.Column(db.DateTime, default=db.func.now())
   completed_time = db.Column(db.DateTime)
   status = db.Column(db.Enum(GameStatus), nullable=False)
@@ -247,6 +249,12 @@ class Game(db.Model):
     play_game_task.delay(self.id)
 
 
+class TournamentStatus(enum.Enum):
+  created = 'created'                # Game has been created, has not been spawned.
+  spawning = 'spawning'        # Game is currently being played
+  spawned = 'spawned'  # Game was unable to be played, due to an internal error
+
+
 class Tournament(db.Model):
   __tablename__ = "tournaments"
   id = db.Column(db.Integer, primary_key=True)
@@ -258,7 +266,10 @@ class Tournament(db.Model):
   participants = db.relationship("TournamentBot", back_populates="tournament")
   games = db.relationship("TournamentGame", back_populates="tournament")
 
+  status = db.Column(db.Enum(TournamentStatus))
+
   def __init__(self, title, games_per_pair):
+    self.status = TournamentStatus.created
     self.title = title
     self.games_per_pair = games_per_pair
 
@@ -284,6 +295,8 @@ class Tournament(db.Model):
   def progress(self):
     queued_games = self.num_games_queued()
     completed_games = self.num_games_completed()
+    if queued_games + completed_games == 0:
+      return 100
     return float(completed_games)/(completed_games + queued_games)*100
 
   def state(self):
@@ -327,9 +340,11 @@ class TournamentGame(db.Model):
   bot_a_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'), nullable=False)
   bot_a = db.relationship("TournamentBot", foreign_keys=bot_a_id)
   bot_a_elo = db.Column(db.Float) # Used just for statistics afterwards
+  bot_a_score = db.Column(db.Integer)
   bot_b_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'), nullable=False)
   bot_b = db.relationship("TournamentBot", foreign_keys=bot_b_id)
   bot_b_elo = db.Column(db.Float)   # Same as above
+  bot_b_score = db.Column(db.Integer)
 
   winner_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'))
   winner = db.relationship("TournamentBot", foreign_keys=winner_id)

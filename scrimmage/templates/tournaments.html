@@ -4,7 +4,15 @@
   <h1>Tournaments</h1>
 
   {% for tournament in tournaments %}
-    <div class="ui segment {% if tournament.is_in_progress() %}green{% endif %}">
+    <div class="ui segment
+      {% if tournament.status.value == 'created' %}
+        black
+      {% elif tournament.status.value == 'spawning' %}
+        yellow
+      {% elif tournament.is_in_progress() %}
+        green
+      {% endif %}
+    ">
       <h3 class="ui dividing header">
         {{ tournament.title }}
         <div class="sub header">
@@ -37,12 +45,16 @@
             <div class="ui {% if tournament.state() == 'done' %} success {% endif %} progress" data-percent="{{ tournament.progress() }}">
               <div class="bar"></div>
               <div class="label">
-                {% if tournament.state() == 'done' %}
-                  Done!
-                {% elif tournament.state() == 'finalize' %}
-                  Finalizing...
+                {% if tournament.status.value != 'spawned' %}
+                  Creating...
                 {% else %}
-                  {{ tournament.num_games_running() }} games running. At least {{ tournament.num_games_queued() }} to go.
+                  {% if tournament.state() == 'done' %}
+                    Done!
+                  {% elif tournament.state() == 'finalize' %}
+                    Finalizing...
+                  {% else %}
+                    {{ tournament.num_games_running() }} games running. At least {{ tournament.num_games_queued() }} to go.
+                  {% endif %}
                 {% endif %}
               </div>
             </div>

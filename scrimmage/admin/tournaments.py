@@ -4,7 +4,7 @@ from scrimmage import app, db
 from scrimmage.decorators import admin_required
 from scrimmage.models import Team, Tournament, TournamentGame, TournamentBot, GameStatus
 
-from scrimmage.tasks import play_tournament_game_task
+from scrimmage.tasks import spawn_tournament_task
 
 import random
 import datetime
@@ -35,25 +35,9 @@ def admin_tournaments_spawn():
   eligible_teams = [team for team in teams if team.can_be_challenged() and team.can_challenge()]
   participants = [TournamentBot(team.current_bot, tournament) for team in eligible_teams]
   db.session.add_all(participants)
-
-  games = []
-  for i in range(len(participants)):
-    for j in range(i+1, len(participants)):
-      for game_index in range(games_per_pair):
-        participant_a = participants[i]
-        participant_b = participants[j]
-
-        if game_index % 2 == 1:
-          participant_a, participant_b = participant_b, participant_a
-
-        games.append(TournamentGame(tournament, participant_a, participant_b))
-
-  random.shuffle(games)
-  db.session.add_all(games)
   db.session.commit()
 
-  for game in games:
-    play_tournament_game_task.delay(game.id)
+  spawn_tournament_task.delay(tournament.id)
 
   return redirect(url_for('admin_tournaments'))
 

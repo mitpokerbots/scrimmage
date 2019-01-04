@@ -6,11 +6,12 @@ import subprocess
 import datetime
 import zipfile
 import jinja2
+import random
 
 from backports import tempfile
 
 from scrimmage import celery_app, app, db
-from scrimmage.models import Bot, Game, Team, GameStatus, TournamentGame, TournamentBot
+from scrimmage.models import Bot, Game, Team, GameStatus, TournamentGame, TournamentBot, Tournament, TournamentStatus
 from scrimmage.helpers import get_s3_object, put_s3_object
 from scrimmage.settings import settings
 
@@ -80,16 +81,24 @@ def _download_and_verify(bot, tmp_dir):
     return False, 'Bot zip is missing files. (Maybe missing pokerbot.sh?)'
 
 
-def _get_winner(game_log):
+def _get_scores(game_log):
   matches = re.search(r'FINAL: [^ ]+ \((-?\d+)\) [^ ]+ \((-?\d+)\)', game_log)
   bot_a_score = int(matches.group(1))
   bot_b_score = int(matches.group(2))
-  if bot_a_score > bot_b_score:
-    return 'a'
-  elif bot_b_score < bot_a_score:
+
+  return bot_a_score, bot_b_score
+
+
+def _get_winner(bot_a_score, bot_b_score):
+  if bot_a_score == bot_b_score:
+    return 'ab'[ord(os.urandom(1)) % 2]
+
+  if bot_a_score is None:
     return 'b'
-  else:
-    return 'tie'
+  elif bot_b_score is None:
+    return 'a'
+
+  return 'a' if bot_a_score > bot_b_score else 'b'
 
 
 K = 40
@@ -124,11 +133,11 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
     is_valid_b_bot, b_path = _download_and_verify(bot_b, tmp_dir)
 
     if not is_valid_a_bot and not is_valid_b_bot:
-      return 'tie', 'Both bots are invalid, so the game is tied\n\n{}: {}\n{}: {}'.format(bot_a_name, a_path, bot_b_name, b_path), None, None
+      return (None, None), 'Both bots are invalid, so the game is tied\n\n{}: {}\n{}: {}'.format(bot_a_name, a_path, bot_b_name, b_path), None, None
     elif not is_valid_a_bot:
-      return 'b', 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_a_name, bot_b_name, bot_a_name, a_path), None, None
+      return (None, 0), 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_a_name, bot_b_name, bot_a_name, a_path), None, None
     elif not is_valid_b_bot:
-      return 'a', 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_b_name, bot_a_name, bot_b_name, b_path), None, None
+      return (0, None), 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_b_name, bot_a_name, bot_b_name, b_path), None, None
 
     game_dir = os.path.join(tmp_dir, 'game')
     os.mkdir(game_dir)
@@ -172,12 +181,12 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
     else:
       bot_b_log = None
 
-    return _get_winner(game_log), game_log, bot_a_log, bot_b_log
+    return _get_scores(game_log), game_log, bot_a_log, bot_b_log
 
 
 
 def _run_bots_and_upload(bot_a, bot_a_name, bot_b, bot_b_name):
-  winner, game_log, bot_a_log, bot_b_log = _run_bots(bot_a, bot_a_name, bot_b, bot_b_name)
+  scores, game_log, bot_a_log, bot_b_log = _run_bots(bot_a, bot_a_name, bot_b, bot_b_name)
 
   log_key_base = os.path.join('logs', '{}_{}'.format(int(time.time()), os.urandom(20).encode('hex')))
 
@@ -196,7 +205,7 @@ def _run_bots_and_upload(bot_a, bot_a_name, bot_b, bot_b_name):
   else:
     bot_b_log_key = None
 
-  return winner, gamelog_key, bot_a_log_key, bot_b_log_key
+  return scores, gamelog_key, bot_a_log_key, bot_b_log_key
 
 
 
@@ -226,7 +235,7 @@ def play_game_task(game_id):
   opponent_name = "opponent_{}".format(_safe_name(game.opponent.name))
 
   try:
-    winner, log_key, challenger_log_key, opponent_log_key = _run_bots_and_upload(challenger_bot, challenger_name, opponent_bot, opponent_name)
+    scores, log_key, challenger_log_key, opponent_log_key = _run_bots_and_upload(challenger_bot, challenger_name, opponent_bot, opponent_name)
     db.session.expire_all()
 
     # Reload stuff from DB.
@@ -234,7 +243,7 @@ def play_game_task(game_id):
     challenger, opponent = _multiple_with_for_update(Team, [game.challenger_id, game.opponent_id])
     challenger_bot, opponent_bot = _multiple_with_for_update(Bot, [challenger_bot_id, opponent_bot_id])
 
-    winner = 'ab'[ord(os.urandom(1)) % 2] if winner == 'tie' else winner
+    winner = _get_winner(*scores)
 
     # Relevant database updates.
     game.winner_id = challenger.id if winner == 'a' else opponent.id
@@ -243,6 +252,8 @@ def play_game_task(game_id):
     challenger.losses += int(winner == 'b')
     challenger_bot.wins += int(winner == 'a')
     challenger_bot.losses += int(winner == 'b')
+
+    game.challenger_score, game.opponent_score = scores
     opponent.wins += int(winner == 'b')
     opponent.losses += int(winner == 'a')
     opponent_bot.wins += int(winner == 'b')
@@ -283,16 +294,18 @@ def play_tournament_game_task(tournament_game_id):
   bot_b = tournament_bot_b.bot
 
   try:
-    winner, _, _, _ = _run_bots(bot_a, "A", bot_b, "B")
+    scores, _, _, _ = _run_bots(bot_a, "A", bot_b, "B")
     db.session.expire_all()
 
     # Reload stuff from DB.
     game = TournamentGame.query.options(raiseload('*')).with_for_update().get(tournament_game_id)
     tournament_bot_a, tournament_bot_b = _multiple_with_for_update(TournamentBot, [game.bot_a_id, game.bot_b_id])
 
-    winner = 'ab'[ord(os.urandom(1)) % 2] if winner == 'tie' else winner
+    winner = _get_winner(*scores)
 
     # Relevant database updates.
+    game.bot_a_score, game.bot_b_score = scores
+
     game.winner_id = tournament_bot_a.id if winner == 'a' else tournament_bot_b.id
     game.loser_id = tournament_bot_b.id if winner == 'a' else tournament_bot_a.id
     tournament_bot_a.wins += int(winner == 'a')
@@ -315,3 +328,36 @@ def play_tournament_game_task(tournament_game_id):
     game.status = GameStatus.internal_error
     db.session.commit()
     raise
+
+
+@celery_app.task(ignore_result=True)
+def spawn_tournament_task(tournament_id):
+  tournament = Tournament.query.get(tournament_id)
+  assert tournament.status == TournamentStatus.created
+
+  tournament.status = TournamentStatus.spawning
+  db.session.commit()
+
+  participants = list(tournament.participants)
+
+  games = []
+  for i in range(len(participants)):
+    for j in range(i+1, len(participants)):
+      for game_index in range(games_per_pair):
+        participant_a = participants[i]
+        participant_b = participants[j]
+
+        if game_index % 2 == 1:
+          participant_a, participant_b = participant_b, participant_a
+
+        games.append(TournamentGame(tournament, participant_a, participant_b))
+
+  random.shuffle(games)
+  db.session.add_all(games)
+  db.session.commit()
+
+  for game in games:
+    play_tournament_game_task.delay(game.id)
+
+  tournament.status = TournamentStatus.spawned
+  db.session.commit()

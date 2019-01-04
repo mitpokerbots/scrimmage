@@ -47,6 +47,8 @@
         <th>O. ELO</th>
         <th>O. Bot</th>
         <th>Creation Time</th>
+        <th>C. Score</th>
+        <th>O. Score</th>
         <th>Winner</th>
         <th>Game Log</th>
         <th>C. Log</th>
@@ -89,6 +91,8 @@
           </td>
           <td>{{ game.opponent_bot.name }}</td>
           <td>{{ game.create_time }}</td>
+          <td>{{ game.challenger_score }}</td>
+          <td>{{ game.opponent_score }}</td>
           <td>
             {% if game.status.value == 'completed' %}
               {{ game.winner.name }}
