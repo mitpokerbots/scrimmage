@@ -343,7 +343,7 @@ def spawn_tournament_task(tournament_id):
   games = []
   for i in range(len(participants)):
     for j in range(i+1, len(participants)):
-      for game_index in range(games_per_pair):
+      for game_index in range(tournament.games_per_pair):
         participant_a = participants[i]
         participant_b = participants[j]
 
