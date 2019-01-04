@@ -36,7 +36,7 @@ services:
       - S3_BUCKET
     scale:
       cpu: 1024
-      memory: 2048
+      memory: 1536
   flower:
     build:
       path: .
