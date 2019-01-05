@@ -5,7 +5,8 @@ import os
 class Config(object):
   SQLALCHEMY_DATABASE_URI = 'sqlite://:memory:'
   SQLALCHEMY_TRACK_MODIFICATIONS = False
-  AUTH_URL_BASE = 'https://jserrino.scripts.mit.edu:444/auth/auth.php'
+  AUTH_URL_BASE = 'https://pokerbots.scripts.mit.edu:444/scrimmage/auth.php'
+  USER_INFO_URL_BASE = 'https://pokerbots.scripts.mit.edu/scrimmage/info.py'
   MAX_CONTENT_LENGTH = 50 * 1024 * 1024
 
 class ProdConfig(Config):

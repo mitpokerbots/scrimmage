@@ -1,6 +1,7 @@
 import enum, datetime
 
 from scrimmage import app, db
+from helpers import get_student_info
 
 class AdminSetting(db.Model):
   __tablename__ = 'settings'
@@ -36,9 +37,14 @@ class User(db.Model):
   team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
   team = db.relationship("Team", back_populates="members")
 
+  class_year = db.Column(db.String(128))
+  full_name = db.Column(db.String(128))
+  department = db.Column(db.String(128))
+
   def __init__(self, kerberos, team):
     self.kerberos = kerberos
     self.team = team
+    self.full_name, self.class_year, self.department = get_student_info(kerberos)
 
 
 class Bot(db.Model):

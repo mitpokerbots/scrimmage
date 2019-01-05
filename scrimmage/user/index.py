@@ -1,4 +1,4 @@
-from flask import render_template, g, url_for, redirect, request
+from flask import render_template, g, url_for, redirect, request, Response
 
 from scrimmage import app, db
 from scrimmage.models import User, Team, TeamJoinRequest, GameRequest, GameRequestStatus, Game, Announcement, Tournament
@@ -56,6 +56,10 @@ def cancel_team_request():
 @login_required
 def create_team():
   team_name = request.form['team_name']
+
+  if Team.query.filter(Team.name == team_name).count() != 0:
+    return Response("A team with that name already exists. Try again.", content_type="text/plain", status=400)
+
   team = Team(team_name)
   db.session.add(team)
   user = User(g.kerberos, team)

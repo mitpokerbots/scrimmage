@@ -40,7 +40,7 @@ def generate_team_stats(team):
   elo_over_time = []
   histogram_data = []
 
-  current_bucket = None if len(games) == 0 else [_round_date(games[0].completed_time, granularity), 0, 0, 0]
+  current_bucket = [0, 0, 0, 0] if len(games) == 0 else [_round_date(games[0].completed_time, granularity), 0, 0, 0]
 
   for game in games:
     did_challenge = game.challenger_id == team.id

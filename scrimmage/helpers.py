@@ -1,3 +1,4 @@
+import requests
 import boto3
 from botocore.client import Config
 
@@ -15,10 +16,22 @@ def _get_s3_context():
       config=Config(signature_version='s3v4')
     )
 
+
 def get_s3_object(key):
   client = _get_s3_context()
   return client.get_object(Bucket=app.config['S3_BUCKET'], Key=key)['Body']
 
+
 def put_s3_object(key, body):
   client = _get_s3_context()
   client.put_object(Body=body, Bucket=app.config['S3_BUCKET'], Key=key)
+
+
+def get_student_info(kerberos):
+  r = requests.get(app.config['USER_INFO_URL_BASE'], params={'user': kerberos})
+
+  if r.status_code != 200:
+    return None, None, None
+
+  data = r.json()
+  return data['name'], data['class_year'], data['department']
