@@ -227,12 +227,12 @@ def play_game_task(game_id):
   challenger = game.challenger
   challenger_bot = game.challenger_bot
   challenger_bot_id = challenger_bot.id
-  challenger_name = "challenger_{}".format(_safe_name(game.challenger.name))
+  challenger_name = "A"
 
   opponent = game.opponent
   opponent_bot = game.opponent_bot
   opponent_bot_id = opponent_bot.id
-  opponent_name = "opponent_{}".format(_safe_name(game.opponent.name))
+  opponent_name = "B"
 
   try:
     scores, log_key, challenger_log_key, opponent_log_key = _run_bots_and_upload(challenger_bot, challenger_name, opponent_bot, opponent_name)
