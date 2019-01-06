@@ -57,7 +57,7 @@ def _run_compile_command(command, bot_dir):
     stderr=subprocess.STDOUT
   )
 
-  output = command.communicate()
+  output, _ = command.communicate()
   return command.returncode == 0, output
 
 
