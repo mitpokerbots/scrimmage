@@ -48,6 +48,37 @@ def _safe_name(name):
   return name
 
 
+def _run_compile_command(command, bot_dir):
+  command = subprocess.Popen(
+    command,
+    cwd=bot_dir,
+    env=_get_environment()
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT
+  )
+
+  output = command.communicate()
+  return communicate.returncode == 0, output
+
+
+def _compile_bot(bot_dir):
+  result = "Cleaning bot dir...\n"
+
+  success, output = _run_compile_command(['scons', '--clean'], bot_dir)
+  result += output + "\n"
+
+  if not success:
+    return False, result
+
+  result += "Compiling bot...\n"
+
+  success, output = _run_compile_command(['scons'], bot_dir)
+  result += output + "\n"
+
+  return success, result
+
+
+
 def _download_and_verify(bot, tmp_dir):
   bot_dir = os.path.join(tmp_dir, os.urandom(10).encode('hex'))
   os.mkdir(bot_dir)
@@ -68,15 +99,18 @@ def _download_and_verify(bot, tmp_dir):
     with zipfile.ZipFile(bot_zip_path, 'r') as z:
       z.extractall(bot_extract_dir)
 
+    bot_dir = None
     for root, dirs, files in os.walk(bot_extract_dir):
       if 'SConstruct' in files:
         os.chmod(os.path.join(root, 'pokerbot.sh'), 0777)
-        subprocess.check_call(['scons', '--clean'], cwd=root, env=_get_environment())
-        return True, root
+        bot_dir = root
+        break
 
-    return False, 'Bot zip has no SConstruct file.'
-  except subprocess.CalledProcessError:
-    return False, 'Bot failed to compile.'
+    if bot_dir is None:
+      return False, 'Bot zip file has no SConstruct'
+
+    success, compile_log = _compile_bot(bot_dir)
+    return success, bot_dir if success else compile_log
   except OSError:
     return False, 'Bot zip is missing files. (Maybe missing pokerbot.sh?)'
 
@@ -133,11 +167,12 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
     is_valid_b_bot, b_path = _download_and_verify(bot_b, tmp_dir)
 
     if not is_valid_a_bot and not is_valid_b_bot:
-      return (None, None), 'Both bots are invalid, so the game is tied\n\n{}: {}\n{}: {}'.format(bot_a_name, a_path, bot_b_name, b_path), None, None
+      # These are actually logs
+      return (None, None), 'Both bots are invalid, so the game is tied', a_path, b_path
     elif not is_valid_a_bot:
-      return (None, 0), 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_a_name, bot_b_name, bot_a_name, a_path), None, None
+      return (None, 0), 'Bot {} is invalid, so {} wins.'.format(bot_a_name, bot_b_name), a_path, None
     elif not is_valid_b_bot:
-      return (0, None), 'Bot {} is invalid, so {} wins.\n\n{}: {}'.format(bot_b_name, bot_a_name, bot_b_name, b_path), None, None
+      return (0, None), 'Bot {} is invalid, so {} wins.'.format(bot_b_name, bot_a_name), None, b_path
 
     game_dir = os.path.join(tmp_dir, 'game')
     os.mkdir(game_dir)
