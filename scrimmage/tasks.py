@@ -52,13 +52,13 @@ def _run_compile_command(command, bot_dir):
   command = subprocess.Popen(
     command,
     cwd=bot_dir,
-    env=_get_environment()
+    env=_get_environment(),
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT
   )
 
   output = command.communicate()
-  return communicate.returncode == 0, output
+  return command.returncode == 0, output
 
 
 def _compile_bot(bot_dir):
