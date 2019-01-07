@@ -11,6 +11,8 @@ from scrimmage.statistics import generate_team_stats
 from coolname import generate_slug
 from collections import namedtuple
 
+from sqlalchemy import and_
+
 @app.route('/team')
 @team_required
 def manage_team():
@@ -96,7 +98,7 @@ def leave_team():
 @app.route('/team/answer_join', methods=['POST'])
 @team_required
 def answer_join():
-  join_request = TeamJoinRequest.query.filter(TeamJoinRequest.team == g.team and TeamJoinRequest.kerberos == request.form['kerberos']).one_or_none()
+  join_request = TeamJoinRequest.query.filter(and_(TeamJoinRequest.team == g.team, TeamJoinRequest.kerberos == request.form['kerberos'])).one_or_none()
   assert join_request is not None
 
   if request.form['action'] == 'accept':

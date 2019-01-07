@@ -1,5 +1,7 @@
 from flask import render_template, g, url_for, redirect, request, Response
 
+from sqlalchemy import and_
+
 from scrimmage import app, db
 from scrimmage.models import User, Team, TeamJoinRequest, GameRequest, GameRequestStatus, Game, Announcement, Tournament
 from scrimmage.decorators import login_required, team_required, set_flash, sponsor_or_team_required
@@ -15,7 +17,7 @@ def index():
   announcements = Announcement.query.order_by(Announcement.create_time.desc()).limit(1).all()
   if not g.team:
     join_request = TeamJoinRequest.query.filter(TeamJoinRequest.kerberos == g.kerberos).one_or_none()
-    joinable_teams = Team.query.filter(Team.is_disabled == False and Team.must_autoaccept == False).all()
+    joinable_teams = Team.query.filter(and_(Team.is_disabled == False, Team.must_autoaccept == False)).all()
     requestable_teams = [team for team in joinable_teams if team.can_be_requested()]
     return render_template('no_team.html', announcements=announcements, teams=requestable_teams, join_request=join_request)
   
