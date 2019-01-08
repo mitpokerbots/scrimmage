@@ -161,6 +161,14 @@ def _get_environment():
   return base
 
 
+def _read_logfile(filename, log_filesize):
+  if not os.path.isfile(filename):
+    return None
+
+  with open(filename, 'r') as f:
+    return f.read(log_filesize)
+
+
 def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
   with tempfile.TemporaryDirectory() as tmp_dir:
     is_valid_a_bot, a_path = _download_and_verify(bot_a, tmp_dir)
@@ -202,19 +210,8 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
 
     player_log_filesize = int(settings['maximum_player_log_file_size'])
 
-    bot_a_log_filename = os.path.join(game_dir, '{}.dump'.format(bot_a_name))
-    if os.path.isfile(bot_a_log_filename):
-      with open(bot_a_log_filename, 'r') as bot_a_log_file:
-        bot_a_log = bot_a_log_file.read(player_log_filesize)
-    else:
-      bot_a_log = None
-
-    bot_b_log_filename = os.path.join(game_dir, '{}.dump'.format(bot_b_name))
-    if os.path.isfile(bot_b_log_filename):
-      with open(bot_a_log_filename, 'r') as bot_b_log_file:
-        bot_b_log = bot_b_log_file.read(player_log_filesize)
-    else:
-      bot_b_log = None
+    bot_a_log = _read_logfile(os.path.join(game_dir, '{}.dump'.format(bot_a_name)), player_log_filesize)
+    bot_b_log = _read_logfile(os.path.join(game_dir, '{}.dump'.format(bot_b_name)), player_log_filesize)
 
     return _get_scores(game_log), game_log, bot_a_log, bot_b_log
 
