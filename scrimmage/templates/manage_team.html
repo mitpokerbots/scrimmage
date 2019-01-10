@@ -124,47 +124,54 @@
             <th>Wins</th>
             <th>Losses</th>
             <th>Created</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          {% for bot in g.team.bots|sort(attribute='create_time') %}
+          {% for bot in g.team.active_bots()|sort(attribute='create_time') %}
             <tr{% if g.team.current_bot == bot %} class="positive"{% endif %}>
               <td>{{ bot.name }}</td>
               <td>{{ bot.wins }}</td>
               <td>{{ bot.losses }}</td>
               <td>{{ bot.create_time }}</td>
+              <td style="text-align: center;">
+                <form class="ui inline form" action="{{ url_for('set_bot') }}" method="POST"
+                  style="display: inline-block;"
+                >
+                  <input type="hidden" name="bot_id" value="{{ bot.id }}" />
+                  <button
+                    class="ui positive icon button {% if bot == g.team.current_bot %}disabled{% endif %}"
+                    title="Set bot"
+                    style="pointer-events: auto;"
+                  >
+                    <i class="mouse pointer icon"></i>
+                  </button>
+                </form>
+                <form
+                  class="ui inline form"
+                  action="{{ url_for('delete_bot') }}"
+                  method="POST"
+                  style="display: inline-block;"
+                  onsubmit="return confirm('Are you sure you want to delete? This action cannot be undone.');"
+                >
+                  <input type="hidden" name="bot_id" value="{{ bot.id }}" />
+                  <button
+                    class="ui negative icon button {% if bot == g.team.current_bot %}disabled{% endif %}"
+                    title="Delete bot"
+                    style="pointer-events: auto;"
+                  >
+                    <i class="times icon"></i>
+                  </button>
+                </form>
+              </td>
             </tr>
           {% else %}
             <tr>
-              <td colspan=3>You don't have any bots! Upload one below.
+              <td colspan=5>You don't have any bots! Upload one below.
             </tr>
           {% endfor %}
         </tbody>
       </table>
-      {% if g.team.bots|length > 0 %}
-        <form class="ui inline form" action="{{ url_for('set_bot') }}" method="POST">
-          <div class="ui stackable grid container">
-            <div class="twelve wide column">
-              <div class="field">
-                <label>Set bot</label>
-                <select class="ui dropdown" name="bot_id">
-                  {% for bot in g.team.bots|sort(attribute='create_time') %}
-                    <option value='{{ bot.id }}' {% if g.team.current_bot == bot %}selected{% endif %}>
-                      {{ bot.name }}
-                    </option>
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-            <div class="four wide column">
-              <div class="field">
-                <label>&nbsp;</label>
-                <button class="ui fluid primary button">Set</button>
-              </div>
-            </div>
-          </div>
-        </form>
-      {% endif %}
       <div class="ui top attached segment">
         <h3 class="ui dividing header">Upload a bot</h3>
         <div>

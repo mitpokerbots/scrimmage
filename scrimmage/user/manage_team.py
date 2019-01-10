@@ -68,6 +68,21 @@ def create_bot():
   new_bot = Bot(g.team, name, key)
   db.session.add(new_bot)
   db.session.commit()
+  g.team.set_current_bot(new_bot)
+  db.session.commit()
+  return redirect(url_for('manage_team'))
+
+
+@app.route('/team/delete_bot', methods=['POST'])
+@team_required
+def delete_bot():
+  bot_id = int(request.form['bot_id'])
+  bot = Bot.query.get(bot_id)
+  assert bot.team == g.team, "Tried to delete bot from other team"
+  assert g.team.current_bot != bot, "Tried to delete the current bot"
+
+  bot.is_disabled = True
+  db.session.commit()
   return redirect(url_for('manage_team'))
 
 

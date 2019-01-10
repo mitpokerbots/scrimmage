@@ -57,8 +57,7 @@ class Bot(db.Model):
   wins = db.Column(db.Integer)
   losses = db.Column(db.Integer)
   create_time = db.Column(db.DateTime, default=db.func.now())
-
-  # TODO: Compile logs
+  is_disabled = db.Column(db.Boolean, default=False, nullable=False)
 
   def __init__(self, team, name, s3_key):
     self.team = team
@@ -128,6 +127,9 @@ class Team(db.Model):
                              .filter(GameRequest.status == GameRequestStatus.challenged)
                              .order_by(GameRequest.create_time.desc())
                              .all())
+
+  def active_bots(self):
+    return Bot.query.filter(Bot.team == self).filter(Bot.is_disabled == False).all()
 
 
 class TeamJoinRequest(db.Model):

@@ -33,6 +33,7 @@
             <th>ELO</th>
             <th>Wins</th>
             <th>Losses</th>
+            <th>Challenge</th>
           </tr>
         </thead>
         <tbody>
@@ -60,40 +61,29 @@
                   </div>
                 </div>
               </td>
+              <td style="text-align: center">
+                <form class="ui inline form" action="{{ url_for('challenge') }}" method="POST">
+                  <input type="hidden" name="team_id" value="{{ team.id }}" />
+                  <button
+                    class="ui primary icon button
+                    {% if not team.can_challenge() or team == g.team or g.settings['challenges_enabled'].lower() != 'true' %}
+                      disabled
+                    {% endif %}
+                    title="Set bot"
+                    style="pointer-events: auto;"
+                  >
+                    <i class="rocket icon"></i>
+                  </button>
+                </form>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
       {% if g.settings['challenges_enabled'].lower() == 'true' %}
-        {% if challengeable_teams|length > 1%}
-          <form class="ui inline form" action="{{ url_for('challenge') }}" method="POST">
-            <div class="{% if not g.team.can_challenge() %}disabled {% endif %}two fields">
-              <div class="field">
-                <label>Challenge</label>
-                <select class="ui dropdown" name="team_id">
-                  {% for team in challengeable_teams|sort(attribute='name') %}
-                    {% if team != g.team %}
-                      <option value='{{ team.id }}'>
-                        {{ team.name }}
-                      </option>
-                    {% endif %}
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="field">
-                <label>&nbsp;</label>
-                <button class="ui primary button">Challenge!</button>
-              </div>
-            </div>
-          </form>
-          <p>
-            Challenges for people of higher ELO will automatically be accepted. Challenges for reference (yellow) players will also automatically be accepted.
-          </p>
-        {% else %}
-          <p>
-            Please wait a bit for teams to upload their bots.
-          </p>
-        {% endif %}
+        <p>
+          Challenges for people of higher ELO will automatically be accepted. Challenges for reference (yellow) players will also automatically be accepted.
+        </p>
       {% else %}
         <p>
           Challenges are currently disabled.
