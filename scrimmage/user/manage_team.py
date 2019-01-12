@@ -96,6 +96,14 @@ def set_bot():
   return redirect(url_for('manage_team'))
 
 
+@app.route('/team/download_bot/<int:bot_id>')
+@team_required
+def download_bot(bot_id):
+  bot = Bot.query.get(bot_id)
+  assert bot.team == g.team, "Tried to get bot from other team"
+  return send_file(get_s3_object(bot.s3_key), mimetype="application/zip")
+
+
 @app.route('/team/leave', methods=['POST'])
 @team_required
 def leave_team():
