@@ -44,7 +44,7 @@ def admin_tournaments_spawn():
 
 @app.route('/admin/tournaments/<int:tournament_id>/handle', methods=['POST'])
 @admin_required
-def admin_requeue_failed(tournament_id):
+def admin_handle_failed(tournament_id):
   tournament = Tournament.query.get(tournament_id)
 
   query = (
