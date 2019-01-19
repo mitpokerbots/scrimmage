@@ -4,7 +4,7 @@ from scrimmage import app, db
 from scrimmage.decorators import admin_required
 from scrimmage.models import Team, Tournament, TournamentGame, TournamentBot, GameStatus
 
-from scrimmage.tasks import spawn_tournament_task
+from scrimmage.tasks import spawn_tournament_task, play_tournament_game_task
 
 import random
 import datetime
