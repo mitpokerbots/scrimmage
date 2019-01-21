@@ -7,7 +7,7 @@ class AdminSetting(db.Model):
   __tablename__ = 'settings'
   id = db.Column(db.Integer, primary_key=True)
   key = db.Column(db.String(128), unique=True, index=True)
-  value = db.Column(db.String(128), unique=True, index=True)
+  value = db.Column(db.String(128), index=True)
 
   def __init__(self, key, value):
     self.key = key
@@ -170,6 +170,7 @@ class GameRequest(db.Model):
     self.status = GameRequestStatus.challenged
 
   def should_autoaccept(self):
+    from scrimmage.settings import settings
     return (
       self.opponent.must_autoaccept or
       settings['down_challenges_require_accept'].lower() != 'true' or
