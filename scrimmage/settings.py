@@ -14,7 +14,26 @@ DEFAULTS = {
   'game_big_blind': '2',
   'game_starting_stack': '200',
   'game_num_hands': '1000',
-  'game_time_restriction': '100'
+  'game_time_restriction': '30',
+  'down_challenges_affect_elo': 'true',
+  'down_challenges_require_accept': 'true'
+}
+
+DESCRIPTIONS = {
+  'spawn_limit_per_team': 'The maximum number of games a team can have running or queued at a time',
+  'maximum_team_size': 'The maximum size of a team',
+  'chart_granularity': 'The time, in seconds, between buckets of the charts',
+  'recent_games_to_show': 'The number of games to show on the homepage',
+  'challenges_enabled': 'If challenges are allowed or not',
+  'sponsor_portal_password': 'The password to the sponsor portal. The username is sponsor',
+  'extra_admins': 'Comma separated kerberoses of other admins',
+  'maximum_player_log_file_size': 'The size, in bytes, from the player log to upload.', # 10*1024*1024
+  'game_big_blind': 'The size of the big blind for games, in coins.',
+  'game_starting_stack': 'The size of the starting stack for games, in coins.',
+  'game_num_hands': 'The number of hands to play in a single game.',
+  'game_time_restriction': 'The number of seconds to allow each player.',
+  'down_challenges_affect_elo': 'If a higher elo player challenges a lower elo player, does that match effect elo?',
+  'down_challenges_require_accept': 'If a higher elo player challenges a lower elo player, will it be automatically accepted?'
 }
 
 class SettingsClass(object):
@@ -22,6 +41,9 @@ class SettingsClass(object):
 
   def items(self):
     return DEFAULTS.keys()
+
+  def description(self, key):
+    return DESCRIPTIONS.get(key, 'No description provided')
 
   def __getitem__(self, key):
     setting = AdminSetting.query.filter(AdminSetting.key == key).one_or_none()

@@ -170,7 +170,11 @@ class GameRequest(db.Model):
     self.status = GameRequestStatus.challenged
 
   def should_autoaccept(self):
-    return self.opponent.must_autoaccept or (self.opponent.elo > self.challenger.elo)
+    return (
+      self.opponent.must_autoaccept or
+      settings['down_challenges_require_accept'].lower() != 'true' or
+      self.opponent.elo > self.challenger.elo
+    )
 
   def friendly_status(self):
     if self.status == GameRequestStatus.challenged:

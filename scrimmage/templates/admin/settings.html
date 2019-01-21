@@ -15,6 +15,7 @@
     <thead>
       <tr>
         <th>key</th>
+        <th>description</th>
         <th>value</th>
         <th>change value</th>
       </tr>
@@ -23,6 +24,7 @@
       {% for key in g.settings.items()|sort %}
         <tr>
           <td><code>{{ key }}</code></td>
+          <td>{{ g.settings.description(key) }}</td>
           <td>{{ g.settings[key] }}</td>
           <td>
             <form class="ui form inline" method="POST">

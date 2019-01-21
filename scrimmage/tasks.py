@@ -293,7 +293,8 @@ def play_game_task(game_id):
     
     game.challenger_elo = challenger.elo
     game.opponent_elo = opponent.elo
-    challenger.elo, opponent.elo = _elo(challenger.elo, opponent.elo, winner)
+    if settings['down_challenges_affect_elo'].lower() == 'true' or challenger.elo <= opponent.elo:
+      challenger.elo, opponent.elo = _elo(challenger.elo, opponent.elo, winner)
 
     game.status = GameStatus.completed
     game.completed_time = datetime.datetime.now()
