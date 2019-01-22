@@ -327,8 +327,7 @@ def play_tournament_game_task(tournament_game_id):
   bot_b = tournament_bot_b.bot
 
   try:
-    scores = (1, -1)
-    # scores, _, _, _ = _run_bots(bot_a, "A", bot_b, "B")
+    scores, _, _, _ = _run_bots(bot_a, "A", bot_b, "B")
     db.session.expire_all()
 
     # Reload stuff from DB.
