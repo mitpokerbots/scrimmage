@@ -19,6 +19,12 @@ RUN apt-get -t jessie-backports install -yq openjdk-8-jdk-headless
 RUN apt-get install -yq gcc g++ scons autoconf libtool git libpoker-eval libpoker-eval-dev libboost-all-dev libc6-dev
 RUN apt-get install -yq nano
 
+COPY ./deps/BayesElo /home/worker/BayesElo
+WORKDIR /home/worker/BayesElo
+RUN make
+RUN cp /home/worker/BayesElo/bayeselo /usr/bin/bayeselo
+RUN rm -rf /home/worker/BayesElo
+
 COPY ./deps/pbots_calc/libpbots_calc.so /usr/lib/libpbots_calc.so
 COPY ./deps/pbots_calc/pbots_calc.h /usr/include/pbots_calc.h
 COPY ./deps/pbots_calc/pbots_calc.py /usr/local/lib/python2.7/site-packages/pbots_calc.py
