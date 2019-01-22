@@ -32,8 +32,8 @@ DESCRIPTIONS = {
   'game_starting_stack': 'The size of the starting stack for games, in coins.',
   'game_num_hands': 'The number of hands to play in a single game.',
   'game_time_restriction': 'The number of seconds to allow each player.',
-  'down_challenges_affect_elo': 'If a higher elo player challenges a lower elo player, does it need to be accepted?',
-  'down_challenges_require_accept': 'If a higher elo player challenges a lower elo player, will it be automatically accepted?'
+  'down_challenges_affect_elo': 'If a higher elo player challenges a lower elo player, does it affect elo?',
+  'down_challenges_require_accept': 'If a higher elo player challenges a lower elo player, does it need to be accepted?'
 }
 
 class SettingsClass(object):
