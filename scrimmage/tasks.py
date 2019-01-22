@@ -327,7 +327,8 @@ def play_tournament_game_task(tournament_game_id):
   bot_b = tournament_bot_b.bot
 
   try:
-    scores, _, _, _ = _run_bots(bot_a, "A", bot_b, "B")
+    scores = (1, -1)
+    # scores, _, _, _ = _run_bots(bot_a, "A", bot_b, "B")
     db.session.expire_all()
 
     # Reload stuff from DB.
@@ -346,10 +347,6 @@ def play_tournament_game_task(tournament_game_id):
     tournament_bot_b.wins += int(winner == 'b')
     tournament_bot_b.losses += int(winner == 'a')
     
-    game.bot_a_elo = tournament_bot_a.elo
-    game.bot_b_elo = tournament_bot_b.elo
-    tournament_bot_a.elo, tournament_bot_b.elo = _elo(tournament_bot_a.elo, tournament_bot_b.elo, winner)
-
     game.status = GameStatus.completed
     game.completed_time = datetime.datetime.now()
 
@@ -394,3 +391,60 @@ def spawn_tournament_task(tournament_id):
 
   tournament.status = TournamentStatus.spawned
   db.session.commit()
+
+
+@celery_app.task(ignore_result=True)
+def calculate_tournament_elo_task(tournament_id):
+  tournament = Tournament.query.get(tournament_id)
+  assert tournament.status != TournamentStatus.done
+  assert tournament.num_games_queued() + tournament.num_games_running() == 0, "Some games are in progress"
+
+  games = TournamentGame.query.filter(
+    TournamentGame.status == GameStatus.completed
+  ).filter(
+    TournamentGame.tournament == tournament
+  ).all()
+
+  with tempfile.TemporaryDirectory() as tmp_dir:
+    with open(os.path.join(tmp_dir, 'tournament.pgn'), 'w') as pgn_file:
+      pgn = render_template(
+        'tournament.pgn',
+        games=games,
+        tournament=tournament
+      )
+      pgn_file.write(pgn)
+
+    command = subprocess.Popen(
+      ['bayeselo'],
+      cwd=tmp_dir,
+      env=_get_environment(),
+      stdin=subprocess.PIPE
+    )
+
+    command.communicate('\n'.join([
+      'readpgn tournament.pgn',
+      'elo',
+      'mm',
+      'exactdist',
+      'ratings >ratings.txt',
+      ''  # newline at the end
+    ]))
+
+    with open(os.path.join(tmp_dir, 'ratings.txt'), 'r') as ratings_file:
+      ratings_string = ratings_file.read()
+
+    lines = ratings_string.split('\n')[1:]
+    for line in lines:
+      numbers = line.split()
+      if len(numbers) == 0:
+        break
+      bot_id = int(numbers[1])
+      bot = TournamentBot.query.get(bot_id)
+      bot.elo = float(numbers[2]) + 1500.0
+      bot.elo_plus_margin = float(numbers[3])
+      bot.elo_minus_margin = float(numbers[4])
+
+  tournament.status = TournamentStatus.done
+  db.session.commit()
+
+

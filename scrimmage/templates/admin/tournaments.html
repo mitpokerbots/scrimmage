@@ -17,9 +17,12 @@
           black
         {% elif tournament.status.value == 'spawning' %}
           yellow
-        {% elif tournament.is_in_progress() %}
+        {% elif tournament.status.value == 'spawned' %}
+          black
+        {% elif tournament.status.value == 'done' %}
           green
-        {% endif %}">
+        {% endif %}
+      ">
         <h3 class="ui dividing header">
           {{ tournament.title }}
           <div class="sub header">
@@ -85,24 +88,45 @@
           </div>
         </div>
       </div>
-      {% if tournament.num_games_errored() > 0 %}
+      
       <div class="ui segment">
         <div class="ui grid container">
-          <div class="eight wide column">
-            <form class='ui inline form' action="{{ url_for('admin_handle_failed', tournament_id=tournament.id) }}" method="POST">
-              <input type="hidden" name="action" value="requeue" />
-              <button type="submit" class="ui basic negative labeled icon button">Re-queue failed games</button>
-            </form>
+          <div class="four wide column">
+            Tournament controls appear here, as available.
           </div>
-          <div class="eight wide column">
-            <form class='ui inline form' action="{{ url_for('admin_handle_failed', tournament_id=tournament.id) }}" method="POST">
-              <input type="hidden" name="action" value="delete" />
-              <button type="submit" class="ui basic negative labeled icon button">Delete failed games</button>
-            </form>
-          </div>
+          {% if not tournament.is_in_progress() and tournament.status.value == 'spawned' %}
+            <div class="four wide column">
+              <form class='ui inline form' action="{{ url_for('admin_handle_failed', tournament_id=tournament.id) }}" method="POST">
+                <input type="hidden" name="action" value="generate_elo" />
+                <button type="submit" class="ui basic positive labeled icon button">
+                  <i class="calculator icon"></i>
+                  Calculate ELO
+                </button>
+              </form>
+            </div>
+          {% endif %}
+          {% if tournament.num_games_errored() > 0 and tournament.status.value != 'done' %}
+            <div class="four wide column">
+              <form class='ui inline form' action="{{ url_for('admin_handle_failed', tournament_id=tournament.id) }}" method="POST">
+                <input type="hidden" name="action" value="requeue" />
+                <button type="submit" class="ui basic negative labeled icon button">
+                  <i class="refresh icon"></i>
+                  Re-queue failed games
+                </button>
+              </form>
+            </div>
+            <div class="four wide column">
+              <form class='ui inline form' action="{{ url_for('admin_handle_failed', tournament_id=tournament.id) }}" method="POST">
+                <input type="hidden" name="action" value="delete" />
+                <button type="submit" class="ui basic negative labeled icon button">
+                  <i class="times icon"></i>
+                  Delete failed games
+                </button>
+              </form>
+            </div>
+          {% endif %}
         </div>
       </div>
-      {% endif %}
     </div>
   {% else %}
     <p>

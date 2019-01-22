@@ -263,9 +263,10 @@ class Game(db.Model):
 
 
 class TournamentStatus(enum.Enum):
-  created = 'created'                # Game has been created, has not been spawned.
-  spawning = 'spawning'        # Game is currently being played
-  spawned = 'spawned'  # Game was unable to be played, due to an internal error
+  created = 'created'                # Tournament has been created, has not been spawned.
+  spawning = 'spawning'              # Tournament is currently being spawned
+  spawned = 'spawned'                # Tournament has finished spawning
+  done = 'done'                      # Tournament is finished, ELOs are generated.
 
 
 class Tournament(db.Model):
@@ -303,22 +304,20 @@ class Tournament(db.Model):
     return self._num_games_with_status(GameStatus.internal_error)
 
   def is_in_progress(self):
-    return self.num_games_queued() != 0
+    return self.num_games_queued() + self.num_games_running() != 0
 
   def progress(self):
     queued_games = self.num_games_queued()
+    running_games = self.num_games_running()
     completed_games = self.num_games_completed()
-    if queued_games + completed_games == 0:
+    if queued_games + completed_games + running_games == 0:
       return 100
-    return float(completed_games)/(completed_games + queued_games)*100
+    return float(completed_games)/(completed_games + queued_games + running_games)*100
 
-  def state(self):
-    if self.num_games_queued() > 0:
-      return 'progress'
-    elif self.num_games_errored() > 0:
-      return 'finalize'
-    else:
-      return 'done'
+  def sorted_participants(self):
+    if self.status == TournamentStatus.done:
+      return sorted(self.participants, key=lambda b: b.elo, reverse=True)
+    return sorted(self.participants, key=lambda b: b.bot.team.name.lower())
 
 
 
@@ -326,6 +325,8 @@ class TournamentBot(db.Model):
   __tablename__ = "tournament_bots"
   id = db.Column(db.Integer, primary_key=True)
   elo = db.Column(db.Float)
+  elo_plus_margin = db.Column(db.Float) # 90% confidence interval positive bound (i.e. add this number to elo)
+  elo_minus_margin = db.Column(db.Float) # 90% confidence interval negative bound (i.e. subtract this number)
   wins = db.Column(db.Integer)
   losses = db.Column(db.Integer)
 
@@ -338,7 +339,6 @@ class TournamentBot(db.Model):
   def __init__(self, bot, tournament):
     self.wins = 0
     self.losses = 0
-    self.elo = 1500.0
     self.bot = bot
     self.tournament = tournament
 
@@ -352,11 +352,9 @@ class TournamentGame(db.Model):
 
   bot_a_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'), nullable=False)
   bot_a = db.relationship("TournamentBot", foreign_keys=bot_a_id)
-  bot_a_elo = db.Column(db.Float) # Used just for statistics afterwards
   bot_a_score = db.Column(db.Integer)
   bot_b_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'), nullable=False)
   bot_b = db.relationship("TournamentBot", foreign_keys=bot_b_id)
-  bot_b_elo = db.Column(db.Float)   # Same as above
   bot_b_score = db.Column(db.Integer)
 
   winner_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'))
@@ -364,7 +362,7 @@ class TournamentGame(db.Model):
   loser_id = db.Column(db.Integer, db.ForeignKey('tournament_bots.id'))
   loser = db.relationship("TournamentBot", foreign_keys=loser_id)
 
-  status = db.Column(db.Enum(GameStatus), nullable=False)
+  status = db.Column(db.Enum(GameStatus), nullable=False, index=True)
 
   create_time = db.Column(db.DateTime, default=db.func.now())
   completed_time = db.Column(db.DateTime)

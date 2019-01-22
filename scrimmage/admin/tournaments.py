@@ -4,7 +4,7 @@ from scrimmage import app, db
 from scrimmage.decorators import admin_required
 from scrimmage.models import Team, Tournament, TournamentGame, TournamentBot, GameStatus
 
-from scrimmage.tasks import spawn_tournament_task, play_tournament_game_task
+from scrimmage.tasks import spawn_tournament_task, play_tournament_game_task, calculate_tournament_elo_task
 
 import random
 import datetime
@@ -47,6 +47,10 @@ def admin_tournaments_spawn():
 def admin_handle_failed(tournament_id):
   tournament = Tournament.query.get(tournament_id)
 
+  if request.form['action'] == 'generate_elo':
+    calculate_tournament_elo_task.delay(tournament.id)
+    return redirect(url_for('admin_tournaments'))
+
   query = (
     TournamentGame.query
                   .filter(TournamentGame.tournament == tournament)
@@ -57,6 +61,7 @@ def admin_handle_failed(tournament_id):
     query.delete()
     db.session.commit()
     return redirect(url_for('admin_tournaments'))
+
 
   failed_games = query.all() 
 
@@ -70,3 +75,6 @@ def admin_handle_failed(tournament_id):
     play_tournament_game_task.delay(game.id)
 
   return redirect(url_for('admin_tournaments'))
+
+
+

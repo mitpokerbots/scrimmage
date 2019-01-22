@@ -5,13 +5,15 @@
 
   {% for tournament in tournaments %}
     <div class="ui segment
-      {% if tournament.status.value == 'created' %}
-        black
-      {% elif tournament.status.value == 'spawning' %}
-        yellow
-      {% elif tournament.is_in_progress() %}
-        green
-      {% endif %}
+        {% if tournament.status.value == 'created' %}
+          black
+        {% elif tournament.status.value == 'spawning' %}
+          yellow
+        {% elif tournament.status.value == 'spawned' %}
+          black
+        {% elif tournament.status.value == 'done' %}
+          green
+        {% endif %}
     ">
       <h3 class="ui dividing header">
         {{ tournament.title }}
@@ -42,19 +44,19 @@
             </div>
           </div>
           <div class="ui ten wide column">
-            <div class="ui {% if tournament.state() == 'done' %} success {% endif %} progress" data-percent="{{ tournament.progress() }}">
+            <div class="ui {% if tournament.status.value == 'done' %} success {% endif %} progress" data-percent="{{ tournament.progress() }}">
               <div class="bar"></div>
               <div class="label">
-                {% if tournament.status.value != 'spawned' %}
+                {% if tournament.status.value == 'created' %}
                   Creating...
-                {% else %}
-                  {% if tournament.state() == 'done' %}
-                    Done!
-                  {% elif tournament.state() == 'finalize' %}
-                    Finalizing...
-                  {% else %}
-                    {{ tournament.num_games_running() }} games running. At least {{ tournament.num_games_queued() }} to go.
-                  {% endif %}
+                {% elif tournament.status.value == 'spawning' %}
+                  Spawning games. {{ tournament.num_games_running() }} games running.
+                {% elif tournament.status.value == 'spawned' and tournament.is_in_progress() %}
+                  {{ tournament.num_games_running() }} games running. {{ tournament.num_games_queued() }} to go.
+                {% elif tournament.status.value == 'spawned' and not tournament.is_in_progress() %}
+                  Finalizing...
+                {% elif tournament.status.value == 'done' %}
+                  Done!
                 {% endif %}
               </div>
             </div>
@@ -72,13 +74,17 @@
                 </tr>
               </thead>
               <tbody>
-                {% for bot in tournament.participants|sort(attribute='elo', reverse=True) %}
+                {% for bot in tournament.sorted_participants() %}
                   <tr{% if g.team == bot.bot.team %} class='active'{% endif %}>
                     <td>{{ bot.bot.team.name }}</td>
                     <td style="text-align: center">
                       <div class="ui mini statistic">
                         <div class="value">
-                          {{ bot.elo | int }}
+                          {% if bot.elo is not none %}
+                            {{ bot.elo | int }}
+                          {% else %}
+                            N/A
+                          {% endif %}
                         </div>
                       </div>
                     </td>
