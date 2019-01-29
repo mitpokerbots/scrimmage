@@ -15,6 +15,22 @@
       Your team is currently disabled, and cannot challenge or receive new challenges.
     </div>
   {% endif %}
+  {% if g.settings['challenges_enabled'] != 'true' %}
+    <div class="ui info message">
+      <div class="header">
+        Challenges disabled.
+      </div>
+      Challenges are currently disabled.
+    </div>
+  {% endif %}
+  {% if g.settings['challenges_only_reference'] == 'true' %}
+    <div class="ui info message">
+      <div class="header">
+        Reference challenges only.
+      </div>
+      Challenges are disabled against all teams besides reference players.
+    </div>
+  {% endif %}
   {% if not g.team.can_challenge() %}
     <div class="ui warning message">
       <div class="header">
@@ -66,7 +82,12 @@
                   <input type="hidden" name="team_id" value="{{ team.id }}" />
                   <button
                     class="ui primary icon button
-                    {% if not team.can_challenge() or team == g.team or g.settings['challenges_enabled'].lower() != 'true' %}
+                    {% if (
+                      not team.can_challenge() or
+                      team == g.team or
+                      g.settings['challenges_enabled'].lower() != 'true' or
+                      not (g.settings['challenges_only_reference'] == 'false' or team.must_autoaccept)
+                    ) %}
                       disabled
                     {% endif %}
                     title="Set bot"

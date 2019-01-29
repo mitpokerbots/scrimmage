@@ -8,6 +8,7 @@ DEFAULTS = {
   'chart_granularity': '86400',
   'recent_games_to_show': '20',
   'challenges_enabled': 'true',
+  'challenges_only_reference': 'false',
   'sponsor_portal_password': 'abc123',
   'extra_admins': '',
   'maximum_player_log_file_size': '10485760', # 10*1024*1024
@@ -25,6 +26,7 @@ DESCRIPTIONS = {
   'chart_granularity': 'The time, in seconds, between buckets of the charts',
   'recent_games_to_show': 'The number of games to show on the homepage',
   'challenges_enabled': 'If challenges are allowed or not',
+  'challenges_only_reference': 'If challenges are enabled, can they only challenge reference teams?',
   'sponsor_portal_password': 'The password to the sponsor portal. The username is sponsor',
   'extra_admins': 'Comma separated kerberoses of other admins',
   'maximum_player_log_file_size': 'The size, in bytes, from the player log to upload.', # 10*1024*1024

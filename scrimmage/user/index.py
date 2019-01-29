@@ -83,6 +83,7 @@ def challenge():
   team_id = int(request.form['team_id'])
   team = Team.query.get(team_id)
   assert g.settings['challenges_enabled'].lower() == 'true'
+  assert g.settings['challenges_only_reference'] == 'false' or team.must_autoaccept
   assert g.team.can_challenge()
   assert team.can_be_challenged()
 
