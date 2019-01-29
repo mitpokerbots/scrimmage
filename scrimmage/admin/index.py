@@ -1,14 +1,43 @@
-from flask import g, render_template, request, session, redirect, url_for, send_file
+from flask import g, render_template, request, session, redirect, url_for, send_file, jsonify
+from collections import defaultdict
 
 from scrimmage import app, db
 from scrimmage.decorators import admin_required, set_flash
 from scrimmage.helpers import get_s3_object
-from scrimmage.models import Game, GameStatus, Announcement
+from scrimmage.models import Game, GameStatus, Announcement, Tournament
 
 @app.route('/admin/')
 @admin_required
 def admin_index():
   return render_template('admin/index.html')
+
+
+@app.route('/admin/export_to_playground', methods=['GET'])
+@admin_required
+def admin_export_to_playground():
+  team_id_to_team = {}
+  team_id_to_bots = defaultdict(lambda: [])
+
+  for tournament in Tournament.query.all():
+    for participant in tournament.participants:
+      team = participant.bot.team
+      team_id_to_bots[team.id].append({
+        'name': tournament.title,
+        's3_key': participant.bot.s3_key
+      })
+      team_id_to_team[team.id] = team
+
+  result = { 'teams': [] }
+  for tid, team in team_id_to_team.iteritems():
+    result['teams'].append({
+      'name': team_id_to_team[tid].name,
+      'bots': team_id_to_bots[tid]
+    })
+
+  result['teams'].sort(key=lambda t: t['name'])
+  return jsonify(result)
+
+
 
 
 @app.route('/admin/announcements', methods=['GET', 'POST'])
