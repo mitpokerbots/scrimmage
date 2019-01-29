@@ -131,5 +131,8 @@ def answer_request(request_id):
 @app.route('/tournaments')
 @sponsor_or_team_required
 def show_tournaments():
-  tournaments = Tournament.query.order_by(Tournament.create_time.desc()).all()
+  query = Tournament.query.order_by(Tournament.create_time.desc())
+  if not g.is_admin and not g.is_sponsor:
+    query = query.filter(Tournament.is_private == False)
+  tournaments = query.all()
   return render_template('tournaments.html', tournaments=tournaments)

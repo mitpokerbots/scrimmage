@@ -25,6 +25,11 @@
       ">
         <h3 class="ui dividing header">
           {{ tournament.title }}
+          {% if tournament.is_private %}
+            <span class="ui red label">Private</span>
+          {% else %}
+            <span class="ui green label">Public</span>
+          {% endif %}
           <div class="sub header">
             {{ tournament.create_time | naturaltime }}
           </div>
@@ -147,6 +152,12 @@
           <label>Games per pair</label>
           <input type="number" id="games_per_pair" value='0' name='games_per_pair'>
         </div>
+        <div class="inline field">
+          <div class="ui toggle checkbox">
+            <input type="checkbox" class="hidden" name="is_private">
+            <label>Private tournament? (Only visible to admins and sponsors)</label>
+          </div>
+        </div>
         <button type="submit" class="ui primary button">Spawn tournament</button>
       </form>
     </div>
@@ -167,3 +178,10 @@
   </script>
 
 {% endblock %}
+
+{% block scripts %}
+<script>
+$('.ui.checkbox').checkbox();
+</script>
+{% endblock %}
+

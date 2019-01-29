@@ -28,7 +28,8 @@ def admin_tournaments_spawn():
   games_per_pair = int(request.form['games_per_pair'])
   assert games_per_pair >= 0
 
-  tournament = Tournament(title, games_per_pair)
+  is_private = bool(request.form.get('is_private', False))
+  tournament = Tournament(title, games_per_pair, is_private)
   db.session.add(tournament)
 
   teams = Team.query.filter(Team.is_disabled == False).all()

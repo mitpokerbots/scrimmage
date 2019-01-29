@@ -7,6 +7,7 @@ import datetime
 import zipfile
 import jinja2
 import random
+import json
 
 from backports import tempfile
 
@@ -312,6 +313,15 @@ def play_game_task(game_id):
     raise
 
 
+def arbitrary_tournament_data_collection_function(gamelog):
+  # This function collects data on games that are played in a tournament.
+  # Gamelogs from tournaments are not saved since they can result in 200+GB of data, per tournament.
+  # Parse the interesting data you want from the gamelog and return it here (but keep it small!)
+  return {
+    "a_exchanges": gamelog.count("A exchanges"),
+    "b_exchanges": gamelog.count("B exchanges")
+  }
+
 
 @celery_app.task(ignore_result=True)
 def play_tournament_game_task(tournament_game_id):
@@ -327,7 +337,7 @@ def play_tournament_game_task(tournament_game_id):
   bot_b = tournament_bot_b.bot
 
   try:
-    scores, _, _, _ = _run_bots(bot_a, "A", bot_b, "B")
+    scores, gamelog, _, _ = _run_bots(bot_a, "A", bot_b, "B")
     db.session.expire_all()
 
     # Reload stuff from DB.
@@ -348,6 +358,12 @@ def play_tournament_game_task(tournament_game_id):
     
     game.status = GameStatus.completed
     game.completed_time = datetime.datetime.now()
+
+    try:
+      if scores[0] is not None and scores[1] is not None:
+        game.json_statistics = json.dumps(arbitrary_tournament_data_collection_function(gamelog))
+    except:
+      pass
 
     db.session.commit()
 

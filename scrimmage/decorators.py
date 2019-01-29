@@ -14,6 +14,13 @@ ADMINS = set(['jserrino', 'nilai', 'davidja', 'larryq', 'shreyass'])
 def is_admin(kerberos):
   return kerberos in ADMINS or kerberos in [kerb.lower().strip() for kerb in settings['extra_admins'].split(',')]
 
+def _check_sponsor_auth(username, password):
+  """This function is called to check if a username /
+  password combination is valid.
+  """
+  return username.lower() == 'sponsor' and password == settings['sponsor_portal_password']
+
+
 @app.before_request
 def set_up_g():
   """Sets up the following:
@@ -26,11 +33,18 @@ def set_up_g():
   g.settings = settings
   g.is_logged_in = False
   g.is_admin = False
+  g.is_sponsor = False
   g.team = None
   g.kerberos = None
   g.real_kerberos = None
+
+  if request.authorization:
+    auth = request.authorization
+    g.is_sponsor = _check_sponsor_auth(auth.username, auth.password)
+
   if 'kerberos' not in session:
     return
+
   g.is_logged_in = True
   g.kerberos = session['kerberos']
   g.real_kerberos = session['real_kerberos']
@@ -82,13 +96,6 @@ def admin_required(f):
   return decorated_function
 
 
-def _check_auth(username, password):
-  """This function is called to check if a username /
-  password combination is valid.
-  """
-  return username.lower() == 'sponsor' and password == settings['sponsor_portal_password']
-
-
 def _authenticate():
   """Sends a 401 response that enables basic auth"""
   return Response(
@@ -101,8 +108,7 @@ def _authenticate():
 def sponsor_or_admin_required(f):
   @wraps(f)
   def decorated(*args, **kwargs):
-    auth = request.authorization
-    if not g.is_admin and (not auth or not _check_auth(auth.username, auth.password)):
+    if not g.is_admin and not g.is_sponsor:
       return _authenticate()
     return f(*args, **kwargs)
   return decorated
@@ -111,8 +117,7 @@ def sponsor_or_admin_required(f):
 def sponsor_or_team_required(f):
   @wraps(f)
   def decorated(*args, **kwargs):
-    auth = request.authorization
-    if g.team is None and (not auth or not _check_auth(auth.username, auth.password)):
+    if g.team is None and not g.is_sponsor:
       return _authenticate()
     return f(*args, **kwargs)
   return decorated

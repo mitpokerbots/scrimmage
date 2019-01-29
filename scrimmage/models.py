@@ -282,10 +282,13 @@ class Tournament(db.Model):
 
   status = db.Column(db.Enum(TournamentStatus))
 
-  def __init__(self, title, games_per_pair):
+  is_private = db.Column(db.Boolean, default=False, nullable=False)
+
+  def __init__(self, title, games_per_pair, is_private):
     self.status = TournamentStatus.created
     self.title = title
     self.games_per_pair = games_per_pair
+    self.is_private = is_private
 
 
   def _num_games_with_status(self, status):
@@ -366,6 +369,9 @@ class TournamentGame(db.Model):
 
   create_time = db.Column(db.DateTime, default=db.func.now())
   completed_time = db.Column(db.DateTime)
+
+  # Arbitrary json statistics that get saved.
+  json_statistics = db.Column(db.Text)
 
   def __init__(self, tournament, bot_a, bot_b):
     self.tournament = tournament
