@@ -423,7 +423,7 @@ def spawn_tournament_task(tournament_id):
         games.append(TournamentGame(tournament, participant_a, participant_b))
 
   random.shuffle(games)
-  db.session.add_all(games)
+  db.session.bulk_save_objects(games)
   db.session.commit()
 
   for game in games:
