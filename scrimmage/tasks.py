@@ -322,38 +322,29 @@ def arbitrary_tournament_data_collection_function(gamelog):
   for n in range(100, 1100, 100):
     i = gamelog.find('Hand #' + str(n), i)
     if i == -1:
-        pnls.append('nan')
-        i = 0
+      pnls.append('nan')
+      i = 0
     else:
-        j = gamelog.find('(', i)
-        k = gamelog.find(')', i)
-        if j != -1 and k != -1:
-            pnls.append(gamelog[j+1:k])
-        else:
-            pnls.append('nan')
+      j = gamelog.find('(', i)
+      k = gamelog.find(')', i)
+      if j != -1 and k != -1:
+        pnls.append(gamelog[j+1:k])
+      else:
+        pnls.append('nan')
   return {
-    "a_r": gamelog.count("A raises"),
-    "b_r": gamelog.count("B raises"),
-    "a_b": gamelog.count("A bets"),
-    "b_b": gamelog.count("B bets"),
-    "a_ca": gamelog.count("A calls"),
-    "b_ca": gamelog.count("B calls"),
-    "a_ch": gamelog.count("A checks"),
-    "b_ch": gamelog.count("B checks"),
-    "a_f": gamelog.count("A folds"),
-    "b_f": gamelog.count("B folds"),
-    "a_e": gamelog.count("A exchanges"),
-    "b_e": gamelog.count("B exchanges"),
-    "pnl_1": pnls[0],
-    "pnl_2": pnls[1],
-    "pnl_3": pnls[2],
-    "pnl_4": pnls[3],
-    "pnl_5": pnls[4],
-    "pnl_6": pnls[5],
-    "pnl_7": pnls[6],
-    "pnl_8": pnls[7],
-    "pnl_9": pnls[8],
-    "pnl_10": pnls[9]
+    "Ar": gamelog.count("A raises"),
+    "Br": gamelog.count("B raises"),
+    "Ab": gamelog.count("A bets"),
+    "Bb": gamelog.count("B bets"),
+    "Aca": gamelog.count("A calls"),
+    "Bca": gamelog.count("B calls"),
+    "Ach": gamelog.count("A checks"),
+    "Bch": gamelog.count("B checks"),
+    "Af": gamelog.count("A folds"),
+    "Bf": gamelog.count("B folds"),
+    "Ae": gamelog.count("A exchanges"),
+    "Be": gamelog.count("B exchanges"),
+    "pnls": pnls
   }
 
 
