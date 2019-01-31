@@ -410,21 +410,26 @@ def spawn_tournament_task(tournament_id):
 
   participants = list(tournament.participants)
 
-  games = []
+  mappings = []
   for i in range(len(participants)):
     for j in range(i+1, len(participants)):
       for game_index in range(tournament.games_per_pair):
         participant_a = participants[i]
         participant_b = participants[j]
-
         if game_index % 2 == 1:
           participant_a, participant_b = participant_b, participant_a
+        mappings.append({
+          'tournament_id': tournament.id,
+          'bot_a_id': participant_a.id,
+          'bot_b_id': participant_b.id,
+          'status': GameStatus.created
+        })
 
-        games.append(TournamentGame(tournament, participant_a, participant_b))
-
-  random.shuffle(games)
-  db.session.bulk_save_objects(games)
+  random.shuffle(mappings)
+  db.session.bulk_insert_mappings(TournamentGame, mappings)
   db.session.commit()
+
+  games = tournament.games
 
   for game in games:
     play_tournament_game_task.delay(game.id)
