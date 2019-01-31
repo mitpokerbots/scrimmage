@@ -317,9 +317,43 @@ def arbitrary_tournament_data_collection_function(gamelog):
   # This function collects data on games that are played in a tournament.
   # Gamelogs from tournaments are not saved since they can result in 200+GB of data, per tournament.
   # Parse the interesting data you want from the gamelog and return it here (but keep it small!)
+  pnls = []
+  i = 0
+  for n in range(100, 1100, 100):
+    i = gamelog.find('Hand #' + str(n), i)
+    if i == -1:
+        pnls.append('nan')
+        i = 0
+    else:
+        j = gamelog.find('(', i)
+        k = gamelog.find(')', i)
+        if j != -1 and k != -1:
+            pnls.append(gamelog[j+1:k])
+        else:
+            pnls.append('nan')
   return {
-    "a_exchanges": gamelog.count("A exchanges"),
-    "b_exchanges": gamelog.count("B exchanges")
+    "a_r": gamelog.count("A raises"),
+    "b_r": gamelog.count("B raises"),
+    "a_b": gamelog.count("A bets"),
+    "b_b": gamelog.count("B bets"),
+    "a_ca": gamelog.count("A calls"),
+    "b_ca": gamelog.count("B calls"),
+    "a_ch": gamelog.count("A checks"),
+    "b_ch": gamelog.count("B checks"),
+    "a_f": gamelog.count("A folds"),
+    "b_f": gamelog.count("B folds"),
+    "a_e": gamelog.count("A exchanges"),
+    "b_e": gamelog.count("B exchanges"),
+    "pnl_1": pnls[0],
+    "pnl_2": pnls[1],
+    "pnl_3": pnls[2],
+    "pnl_4": pnls[3],
+    "pnl_5": pnls[4],
+    "pnl_6": pnls[5],
+    "pnl_7": pnls[6],
+    "pnl_8": pnls[7],
+    "pnl_9": pnls[8],
+    "pnl_10": pnls[9]
   }
 
 
