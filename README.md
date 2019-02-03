@@ -21,6 +21,8 @@ Production
 
 1. We use [Convox](https://convox.com/) for deploys. Once you make a change, simply run `convox deploy`.
 
+Setting up convox is a little bit of a pain - you have to create the necessary resources and set the required environment variables. Once you have a successful deploy, however, you need to run `convox run python manage.py shell` and then run `from scrimmage import db; db.create_all()` on the first time.
+
 
 Development
 -----------
