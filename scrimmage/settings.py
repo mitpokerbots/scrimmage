@@ -42,7 +42,7 @@ class SettingsClass(object):
   # Key, value pairs. The value represents the defaults if it is not stored in the DB.
 
   def items(self):
-    return DEFAULTS.keys()
+    return list(DEFAULTS.keys())
 
   def description(self, key):
     return DESCRIPTIONS.get(key, 'No description provided')

@@ -1,8 +1,8 @@
 import time
 from flask import redirect, request, session, url_for
 from hashlib import sha256
-from urlparse import urlparse, urlunparse
-from urllib import urlencode
+from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlencode
 
 from scrimmage import app
 

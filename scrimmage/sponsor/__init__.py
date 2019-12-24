@@ -1,1 +1,1 @@
-import index
+from . import index

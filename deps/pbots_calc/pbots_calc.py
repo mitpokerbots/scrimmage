@@ -45,7 +45,7 @@ class _Results(ctypes.Structure):
 try:
     pcalc = ctypes.CDLL(pbots_calc)
 except OSError:
-    print "ERROR: Could not locate %s. Please ensure your enviroment library load path is set properly." % pbots_calc
+    print("ERROR: Could not locate %s. Please ensure your enviroment library load path is set properly." % pbots_calc)
     sys.exit(1)
 
 # Set the argtype and return types from the library.
@@ -68,7 +68,7 @@ class Results:
             self.hands.append(res.hands[i])
 
     def __str__(self):
-        return str(zip(self.hands, self.ev))
+        return str(list(zip(self.hands, self.ev)))
 
 def calc(hands, board, dead, iters):
     res = pcalc.alloc_results()
@@ -76,7 +76,7 @@ def calc(hands, board, dead, iters):
     if err > 0:
         results = Results(res[0])
     else:
-        print "error: could not parse input or something..."
+        print("error: could not parse input or something...")
         results = None
     pcalc.free_results(res)
     return results

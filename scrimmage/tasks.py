@@ -38,7 +38,8 @@ def _verify_zip(zip_file_path):
     if total_size > MAX_ZIP_SIZE:
       return False, 'Bot zip would be too large unzipped'
     return True, None
-  except zipfile.BadZipfile, zipfile.LargeZipfile:
+  except zipfile.BadZipfile as xxx_todo_changeme:
+    zipfile.LargeZipfile = xxx_todo_changeme
     return False, 'Bot zip file is malformed'
 
 
@@ -103,7 +104,7 @@ def _download_and_verify(bot, tmp_dir):
     bot_dir = None
     for root, dirs, files in os.walk(bot_extract_dir):
       if 'SConstruct' in files:
-        os.chmod(os.path.join(root, 'pokerbot.sh'), 0777)
+        os.chmod(os.path.join(root, 'pokerbot.sh'), 0o777)
         bot_dir = root
         break
 
@@ -156,7 +157,7 @@ def _elo(team_a, team_b, winner):
 
 def _get_environment():
   base = os.environ.copy()
-  for key in app.config.keys():
+  for key in list(app.config.keys()):
     if key in os.environ:
       del base[key]
   return base

@@ -28,7 +28,7 @@ def admin_export_to_playground():
       team_id_to_team[team.id] = team
 
   result = { 'teams': [] }
-  for tid, team in team_id_to_team.iteritems():
+  for tid, team in team_id_to_team.items():
     result['teams'].append({
       'name': team_id_to_team[tid].name,
       'bots': team_id_to_bots[tid]
