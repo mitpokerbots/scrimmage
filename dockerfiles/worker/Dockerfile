@@ -1,4 +1,4 @@
-FROM python:2.7-jessie
+FROM python:3
 
 RUN useradd -ms /bin/bash worker
 
