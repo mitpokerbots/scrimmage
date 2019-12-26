@@ -8,8 +8,8 @@ import zipfile
 import jinja2
 import random
 import json
-
-from backports import tempfile
+import binascii
+import tempfile
 
 from scrimmage import celery_app, app, db
 from scrimmage.models import Bot, Game, Team, GameStatus, TournamentGame, TournamentBot, Tournament, TournamentStatus
@@ -18,7 +18,7 @@ from scrimmage.settings import settings
 
 from sqlalchemy.orm import raiseload
 
-ENGINE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'deps', 'engine.jar'))
+ENGINE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'deps', 'engine.py'))
 MAX_ZIP_SIZE = 500 * 1024 * 1024
 
 def render_template(tpl_path, **context):
@@ -46,7 +46,7 @@ def _verify_zip(zip_file_path):
 def _safe_name(name):
   name = re.sub(r'[^a-z0-9_\-]', '-', name.lower())
   if name == '':
-    return "player-" + os.urandom(4).encode('hex')
+    return "player-" + binascii.hexlify(os.urandom(4)).decode()
   return name
 
 
@@ -82,7 +82,7 @@ def _compile_bot(bot_dir):
 
 
 def _download_and_verify(bot, tmp_dir):
-  bot_dir = os.path.join(tmp_dir, os.urandom(10).encode('hex'))
+  bot_dir = os.path.join(tmp_dir, binascii.hexlify(os.urandom(10)).decode())
   os.mkdir(bot_dir)
   bot_download_dir = os.path.join(bot_dir, 'download')
   os.mkdir(bot_download_dir)
@@ -205,7 +205,7 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
       )
       config_file.write(config_txt)
 
-    subprocess.check_call(['java', '-jar', ENGINE_PATH], cwd=game_dir, env=_get_environment())
+    subprocess.check_call(['python', ENGINE_PATH], cwd=game_dir, env=_get_environment())
 
     with open(os.path.join(game_dir, 'gamelog.txt'), 'r') as game_log_file:
       game_log = game_log_file.read()
@@ -222,7 +222,7 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
 def _run_bots_and_upload(bot_a, bot_a_name, bot_b, bot_b_name):
   scores, game_log, bot_a_log, bot_b_log = _run_bots(bot_a, bot_a_name, bot_b, bot_b_name)
 
-  log_key_base = os.path.join('logs', '{}_{}'.format(int(time.time()), os.urandom(20).encode('hex')))
+  log_key_base = os.path.join('logs', '{}_{}'.format(int(time.time()), binascii.hexlify(os.urandom(32)).decode()))
 
   gamelog_key = os.path.join(log_key_base, 'gamelog.txt')
   put_s3_object(gamelog_key, game_log)

@@ -1,4 +1,5 @@
 import os
+import binascii
 
 from flask import g, redirect, render_template, request, url_for, send_file, Response
 
@@ -62,7 +63,7 @@ def create_bot():
   if name == '' or name is None:
     name = generate_slug(2)
 
-  key = os.path.join('bots', str(g.team.id), os.urandom(10).encode('hex') + '.zip')
+  key = os.path.join('bots', str(g.team.id), binascii.hexlify(os.urandom(10)).decode() + '.zip')
   put_s3_object(key, fil)
 
   new_bot = Bot(g.team, name, key)
