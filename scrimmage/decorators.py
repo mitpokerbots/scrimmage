@@ -1,4 +1,4 @@
-from flask import abort, session, g, Response, request
+from flask import abort, session, g, Response, request, redirect, url_for
 from functools import wraps
 
 from scrimmage import app, db
@@ -9,7 +9,7 @@ import humanize
 from pytz import timezone
 import datetime
 
-ADMINS = set(['jserrino', 'nilai', 'davidja', 'larryq', 'shreyass'])
+ADMINS = {'jserrino', 'nilai', 'davidja', 'glram', 'sotremba', 'shreyass', 'andyzhu', 'haijiaw'}
 
 def is_admin(kerberos):
   return kerberos in ADMINS or kerberos in [kerb.lower().strip() for kerb in settings['extra_admins'].split(',')]

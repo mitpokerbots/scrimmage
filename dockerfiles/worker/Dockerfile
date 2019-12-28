@@ -20,10 +20,16 @@ RUN apt-get install -yq default-jdk
 RUN apt-get install -yq gcc g++ scons autoconf libtool git libboost-all-dev libc6-dev
 RUN apt-get install -yq nano
 
+COPY ./deps/BayesElo /home/worker/BayesElo
+WORKDIR /home/worker/BayesElo
+RUN make
+RUN cp /home/worker/BayesElo/bayeselo /usr/bin/bayeselo
+RUN rm -rf /home/worker/BayesElo
+
 USER worker
 
 # copy the rest of the app
 COPY ./scrimmage /home/worker/scrimmage
-COPY ./deps/engine /home/worker/engine
+COPY ./deps/engine/engine.py /home/worker/engine/engine.py
 
 WORKDIR /home/worker

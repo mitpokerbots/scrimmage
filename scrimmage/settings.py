@@ -13,6 +13,7 @@ DEFAULTS = {
   'extra_admins': '',
   'maximum_player_log_file_size': '10485760', # 10*1024*1024
   'game_big_blind': '2',
+  'game_small_blind': '1',
   'game_starting_stack': '200',
   'game_num_hands': '1000',
   'game_time_restriction': '30',
@@ -31,6 +32,7 @@ DESCRIPTIONS = {
   'extra_admins': 'Comma separated kerberoses of other admins',
   'maximum_player_log_file_size': 'The size, in bytes, from the player log to upload.', # 10*1024*1024
   'game_big_blind': 'The size of the big blind for games, in coins.',
+  'game_small_blind': 'The size of the small blind for games, in coins',
   'game_starting_stack': 'The size of the starting stack for games, in coins.',
   'game_num_hands': 'The number of hands to play in a single game.',
   'game_time_restriction': 'The number of seconds to allow each player.',

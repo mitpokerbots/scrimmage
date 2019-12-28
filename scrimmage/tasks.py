@@ -18,7 +18,7 @@ from scrimmage.settings import settings
 
 from sqlalchemy.orm import raiseload
 
-ENGINE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'deps', 'engine.py'))
+ENGINE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'engine', 'engine.py'))
 MAX_ZIP_SIZE = 500 * 1024 * 1024
 
 def render_template(tpl_path, **context):
@@ -50,37 +50,6 @@ def _safe_name(name):
   return name
 
 
-def _run_compile_command(command, bot_dir):
-  command = subprocess.Popen(
-    command,
-    cwd=bot_dir,
-    env=_get_environment(),
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT
-  )
-
-  output, _ = command.communicate()
-  return command.returncode == 0, output
-
-
-def _compile_bot(bot_dir):
-  result = "Cleaning bot dir...\n"
-
-  success, output = _run_compile_command(['scons', '--clean'], bot_dir)
-  result += output + "\n"
-
-  if not success:
-    return False, result
-
-  result += "Compiling bot...\n"
-
-  success, output = _run_compile_command(['scons'], bot_dir)
-  result += output + "\n"
-
-  return success, result
-
-
-
 def _download_and_verify(bot, tmp_dir):
   bot_dir = os.path.join(tmp_dir, binascii.hexlify(os.urandom(10)).decode())
   os.mkdir(bot_dir)
@@ -90,7 +59,7 @@ def _download_and_verify(bot, tmp_dir):
   os.mkdir(bot_extract_dir)
 
   bot_zip_path = os.path.join(bot_download_dir, 'bot.zip')
-  with open(bot_zip_path, 'w') as bot_zip_file:
+  with open(bot_zip_path, 'wb') as bot_zip_file:
     bot_zip_file.write(get_s3_object(bot.s3_key).read())
 
   valid_zip, msg = _verify_zip(bot_zip_path)
@@ -103,22 +72,22 @@ def _download_and_verify(bot, tmp_dir):
 
     bot_dir = None
     for root, dirs, files in os.walk(bot_extract_dir):
-      if 'SConstruct' in files:
-        os.chmod(os.path.join(root, 'pokerbot.sh'), 0o777)
+      if 'commands.json' in files:
         bot_dir = root
+        print(bot_dir)
         break
 
     if bot_dir is None:
-      return False, 'Bot zip file has no SConstruct'
+      return False, 'Bot dir has no commands.json'
 
-    success, compile_log = _compile_bot(bot_dir)
-    return success, bot_dir if success else compile_log
+    return True, bot_dir
   except OSError:
-    return False, 'Bot zip is missing files. (Maybe missing pokerbot.sh?)'
+    return False, 'Bot zip is missing files. (Maybe missing commands.json?)'
 
 
 def _get_scores(game_log):
-  matches = re.search(r'FINAL: [^ ]+ \((-?\d+)\) [^ ]+ \((-?\d+)\)', game_log)
+  matches = re.search(r'Final, [^ ]+ \(([0-9])+\), [^ ]+ \(([0-9])+\)', game_log)
+  if matches is None: return 0, 0
   bot_a_score = int(matches.group(1))
   bot_b_score = int(matches.group(2))
 
@@ -187,7 +156,7 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
     game_dir = os.path.join(tmp_dir, 'game')
     os.mkdir(game_dir)
 
-    with open(os.path.join(game_dir, 'config.txt'), 'w') as config_file:
+    with open(os.path.join(game_dir, 'config.py'), 'w') as config_file:
       config_txt = render_template(
         'config.txt',
         bot_a={
@@ -199,6 +168,7 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
           'path': b_path
         },
         game_big_blind=int(settings['game_big_blind']),
+        game_small_blind=int(settings['game_small_blind']),
         game_starting_stack=int(settings['game_starting_stack']),
         game_num_hands=int(settings['game_num_hands']),
         game_time_restriction=int(settings['game_time_restriction'])
