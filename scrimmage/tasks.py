@@ -444,7 +444,7 @@ def calculate_tournament_elo_task(tournament_id):
       'exactdist',
       'ratings >ratings.txt',
       ''  # newline at the end
-    ]))
+    ]).encode('utf-8'))
 
     with open(os.path.join(tmp_dir, 'ratings.txt'), 'r') as ratings_file:
       ratings_string = ratings_file.read()
