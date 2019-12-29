@@ -3,7 +3,7 @@ services:
     build:
       path: .
       manifest: ./dockerfiles/web/Dockerfile
-    command: gunicorn scrimmage:app -w 4 -b 0.0.0.0:8000
+    command: gunicorn scrimmage:app -w 3 -b 0.0.0.0:8000
     # domain: scrimmage.pokerbots.org
     environment:
       - PRODUCTION=True
@@ -18,7 +18,11 @@ services:
     port: 8000
     scale:
       cpu: 512
-      memory: 512
+      memory: 1024
+      count: 1-3
+      targets:
+        cpu: 70
+        memory: 90
   worker:
     build:
       path: .
@@ -35,8 +39,12 @@ services:
       - S3_REGION
       - S3_BUCKET
     scale:
-      cpu: 1000
+      cpu: 1024
       memory: 1536
+      count: 1-500
+      targets:
+        cpu: 80
+        memory: 90
   flower:
     build:
       path: .
