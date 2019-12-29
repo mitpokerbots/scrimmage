@@ -1,8 +1,8 @@
 import time
 from flask import redirect, request, session, url_for
 from hashlib import sha256
-from urlparse import urlparse, urlunparse
-from urllib import urlencode
+from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlencode
 
 from scrimmage import app
 
@@ -12,7 +12,7 @@ def _verify_token(email, t, token):
   if abs(time.time() - int(t)) > 5:
     return False, "Token is too old."
   h = sha256()
-  h.update(email + t + app.config['AUTH_KEY'])
+  h.update((email + t + app.config['AUTH_KEY']).encode('utf-8'))
   if h.hexdigest() != token:
     return False, "Token does not match."
   if email[-8:].lower() != '@mit.edu':

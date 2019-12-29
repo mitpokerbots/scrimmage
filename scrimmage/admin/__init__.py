@@ -1,4 +1,4 @@
-import index
-import teams
-import users
-import tournaments
+from . import index
+from . import teams
+from . import users
+from . import tournaments

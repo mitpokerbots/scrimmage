@@ -24,6 +24,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.bak
+
+logfile
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -98,3 +101,5 @@ todo.txt
 
 start_worker.sh
 start_server.sh
+
+.idea/

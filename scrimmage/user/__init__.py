@@ -1,3 +1,3 @@
-import index
-import login
-import manage_team
+from . import index
+from . import login
+from . import manage_team

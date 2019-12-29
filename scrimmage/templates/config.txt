@@ -1,12 +1,16 @@
 BIG_BLIND = {{ game_big_blind }}
+SMALL_BLIND = {{ game_small_blind }}
 STARTING_STACK = {{ game_starting_stack }}
-NUMBER_OF_HANDS = {{ game_num_hands }}
-CONNECTION_TIMEOUT = 20
-TIME_RESTRICTION_PER_GAME = {{ game_time_restriction }}
-ENFORCE_TIMING_RESTRICTION = true
-HAND_LOG_FILENAME = gamelog
-DISPLAY_ILLEGAL_ACTIONS = true
-DUPLICATE = false
+NUM_ROUNDS = {{ game_num_hands }}
+CONNECT_TIMEOUT = 20
+QUIT_TIMEOUT = 10
+STARTING_GAME_CLOCK = {{ game_time_restriction }}
+ENFORCE_GAME_CLOCK = True
+GAME_LOG_FILENAME = 'gamelog'
+BUILD_TIMEOUT = 10.
+
+# DISPLAY_ILLEGAL_ACTIONS = True
+# DUPLICATE = False
 
 # TYPE can be FOLDER, SOCKET, RANDOM, or CHECKFOLD
 # NAME is the name of bot and determines which persistent datastore the bot
@@ -14,7 +18,7 @@ DUPLICATE = false
 #      keep the same name so it can access the data it stored in previous
 #      matches.
 # RESET_KEYS determines whether the key/value store is cleared when starting
-#      up. It's false by default.
+#      up. It's False by default.
 
 # FOLDER: Automatically compiles and runs a bot from source.
 # Requires PATH, which is either an absolute or relative (to the jar) path
@@ -23,7 +27,7 @@ DUPLICATE = false
 #   PLAYER_1_PATH = .
 #   PLAYER_1_SCONS_ARGS = 
 #   PLAYER_1_NAME = FOLDERBOT
-#   PLAYER_1_RESET_KEYS = false
+#   PLAYER_1_RESET_KEYS = False
 
 # SOCKET: Engine will wait for bot to connect to a designed socket.
 #   PLAYER_2_TYPE = SOCKET
@@ -37,14 +41,16 @@ DUPLICATE = false
 #   PLAYER_2_TYPE = CHECKFOLD
 #   PLAYER_2_NAME = CHECKFOLDBOT
 
-PLAYER_1_TYPE = FOLDER 
-PLAYER_1_PATH = {{ bot_a.path }}
-PLAYER_1_SCONS_ARGS = 
-PLAYER_1_NAME = {{ bot_a.name }}
-PLAYER_1_RESET_KEYS = true
+# PLAYER_1_TYPE = FOLDER
+PLAYER_1_PATH = '{{ bot_a.path }}'
+# PLAYER_1_SCONS_ARGS =
+PLAYER_1_NAME = '{{ bot_a.name }}'
+# PLAYER_1_RESET_KEYS = True
+PLAYER_1_PORT = 6176
 
-PLAYER_2_TYPE = FOLDER 
-PLAYER_2_PATH = {{ bot_b.path }}
-PLAYER_2_SCONS_ARGS = 
-PLAYER_2_NAME = {{ bot_b.name }}
-PLAYER_2_RESET_KEYS = true
+# PLAYER_2_TYPE = FOLDER
+PLAYER_2_PATH = '{{ bot_b.path }}'
+# PLAYER_2_SCONS_ARGS =
+PLAYER_2_NAME = '{{ bot_b.name }}'
+# PLAYER_2_RESET_KEYS = True
+PLAYER_2_PORT = 6177

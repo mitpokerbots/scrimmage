@@ -1,7 +1,7 @@
 import enum, datetime
 
 from scrimmage import app, db
-from helpers import get_student_info
+from .helpers import get_student_info
 
 class AdminSetting(db.Model):
   __tablename__ = 'settings'
