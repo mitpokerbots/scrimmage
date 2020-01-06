@@ -4,7 +4,7 @@ services:
       path: .
       manifest: ./dockerfiles/web/Dockerfile
     command: gunicorn scrimmage:app -w 3 -b 0.0.0.0:8000
-    # domain: scrimmage.pokerbots.org
+    domain: scrimmage.pokerbots.org
     environment:
       - PRODUCTION=True
       - SQLALCHEMY_DATABASE_URI
@@ -19,10 +19,6 @@ services:
     scale:
       cpu: 512
       memory: 1024
-      count: 1-3
-      targets:
-        cpu: 70
-        memory: 90
   worker:
     build:
       path: .
@@ -41,16 +37,12 @@ services:
     scale:
       cpu: 1024
       memory: 1536
-      count: 1-500
-      targets:
-        cpu: 80
-        memory: 90
   flower:
     build:
       path: .
       manifest: ./dockerfiles/web/Dockerfile
     command: flower -A scrimmage.celery_app --address=0.0.0.0
-    # domain: flower.pokerbots.org
+    domain: flower.pokerbots.org
     environment:
       - PRODUCTION=True
       - SQLALCHEMY_DATABASE_URI
