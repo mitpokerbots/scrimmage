@@ -182,8 +182,8 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
 
     player_log_filesize = int(settings['maximum_player_log_file_size'])
 
-    bot_a_log = _read_logfile(os.path.join(game_dir, '{}.dump'.format(bot_a_name)), player_log_filesize)
-    bot_b_log = _read_logfile(os.path.join(game_dir, '{}.dump'.format(bot_b_name)), player_log_filesize)
+    bot_a_log = _read_logfile(os.path.join(game_dir, '{}.txt'.format(bot_a_name)), player_log_filesize)
+    bot_b_log = _read_logfile(os.path.join(game_dir, '{}.txt'.format(bot_b_name)), player_log_filesize)
 
     return _get_scores(game_log), game_log, bot_a_log, bot_b_log
 
