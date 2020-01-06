@@ -4,7 +4,7 @@ services:
       path: .
       manifest: ./dockerfiles/web/Dockerfile
     command: gunicorn scrimmage:app -w 3 -b 0.0.0.0:8000
-    # domain: scrimmage.pokerbots.org
+    domain: scrimmage.pokerbots.org
     environment:
       - PRODUCTION=True
       - SQLALCHEMY_DATABASE_URI
@@ -50,7 +50,7 @@ services:
       path: .
       manifest: ./dockerfiles/web/Dockerfile
     command: flower -A scrimmage.celery_app --address=0.0.0.0
-    # domain: flower.pokerbots.org
+    domain: flower.pokerbots.org
     environment:
       - PRODUCTION=True
       - SQLALCHEMY_DATABASE_URI

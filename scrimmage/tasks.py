@@ -19,7 +19,7 @@ from scrimmage.settings import settings
 from sqlalchemy.orm import raiseload
 
 ENGINE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'engine', 'engine.py'))
-MAX_ZIP_SIZE = 500 * 1024 * 1024
+MAX_ZIP_SIZE = 1024 * 1024 * 1024
 
 def render_template(tpl_path, **context):
     tpl_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates', tpl_path))
