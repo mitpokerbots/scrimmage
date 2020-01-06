@@ -86,7 +86,7 @@ def _download_and_verify(bot, tmp_dir):
 
 
 def _get_scores(game_log):
-  matches = re.search(r'Final, [^ ]+ \(([0-9])+\), [^ ]+ \(([0-9])+\)', game_log)
+  matches = re.search(r'Final, [^ ]+ \(([\-0-9]+)\), [^ ]+ \(([\-0-9]+)\)', game_log)
   if matches is None: return 0, 0
   bot_a_score = int(matches.group(1))
   bot_b_score = int(matches.group(2))
