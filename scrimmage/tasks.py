@@ -291,7 +291,7 @@ def arbitrary_tournament_data_collection_function(gamelog):
   pnls = []
   i = 0
   for n in range(100, 1100, 100):
-    i = gamelog.find('Hand #' + str(n), i)
+    i = gamelog.find('Round #' + str(n), i)
     if i == -1:
       pnls.append('nan')
       i = 0
@@ -313,8 +313,6 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "Bch": gamelog.count("B checks"),
     "Af": gamelog.count("A folds"),
     "Bf": gamelog.count("B folds"),
-    "Ae": gamelog.count("A exchanges"),
-    "Be": gamelog.count("B exchanges"),
     "pnls": pnls
   }
 
