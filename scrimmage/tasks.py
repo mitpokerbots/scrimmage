@@ -171,7 +171,8 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
         game_small_blind=int(settings['game_small_blind']),
         game_starting_stack=int(settings['game_starting_stack']),
         game_num_hands=int(settings['game_num_hands']),
-        game_time_restriction=int(settings['game_time_restriction'])
+        game_time_restriction=int(settings['game_time_restriction']),
+        player_log_size_limit=int(settings['player_log_size_limit']),
       )
       config_file.write(config_txt)
 
