@@ -28,8 +28,12 @@ RUN rm -rf /home/worker/BayesElo
 
 USER worker
 
+# User requested
+
 # copy the rest of the app
 COPY ./scrimmage /home/worker/scrimmage
 COPY ./deps/engine/engine.py /home/worker/engine/engine.py
 
 WORKDIR /home/worker
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/home/worker/.cargo/bin:${PATH}"
