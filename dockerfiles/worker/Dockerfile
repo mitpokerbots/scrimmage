@@ -26,14 +26,18 @@ RUN make
 RUN cp /home/worker/BayesElo/bayeselo /usr/bin/bayeselo
 RUN rm -rf /home/worker/BayesElo
 
-USER worker
-
 # User requested
+RUN pip install treys
+
+USER worker
 
 # copy the rest of the app
 COPY ./scrimmage /home/worker/scrimmage
 COPY ./deps/engine/engine.py /home/worker/engine/engine.py
 
 WORKDIR /home/worker
+
+# User requested
+
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/home/worker/.cargo/bin:${PATH}"
