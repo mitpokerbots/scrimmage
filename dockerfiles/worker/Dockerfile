@@ -12,6 +12,9 @@ RUN pip install -r /home/worker/requirements.txt
 COPY requirements-worker.txt /home/worker/requirements-worker.txt
 RUN pip install -r /home/worker/requirements-worker.txt
 
+# User requested
+RUN pip install treys
+
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update -y
@@ -25,9 +28,6 @@ WORKDIR /home/worker/BayesElo
 RUN make
 RUN cp /home/worker/BayesElo/bayeselo /usr/bin/bayeselo
 RUN rm -rf /home/worker/BayesElo
-
-# User requested
-RUN pip install treys
 
 USER worker
 
