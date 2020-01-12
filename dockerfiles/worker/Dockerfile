@@ -41,3 +41,4 @@ WORKDIR /home/worker
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/home/worker/.cargo/bin:${PATH}"
+RUN rustup install nightly
