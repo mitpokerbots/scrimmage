@@ -49,3 +49,5 @@ ENV PATH="/home/worker/.cargo/bin:${PATH}"
 RUN rustup install nightly
 RUN cargo install just
 RUN cargo install cargo-build-deps bitflags rand itertools approx clap
+RUN cargo build --offline -p bitflags -p rand -p itertools -p approx -p clap || true
+RUN cargo build --offline --release -p bitflags -p rand -p itertools -p approx -p clap || true
