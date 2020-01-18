@@ -44,5 +44,20 @@ WORKDIR /home/worker
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/home/worker/.cargo/bin:${PATH}"
-RUN rustup install nightly
-RUN cargo install just
+# Install the Just command runner
+RUN cargo install just -q
+RUN cargo install cargo-build-deps -q
+
+# Take steps needed to prebuild only declared dependencies and work with non-Rust bots
+# So allow for failure (because cargo commands require a Cargo.toml file to work)
+# and non Rust projects don't have that
+
+# Only build specific packages, that are specified as dependencies
+# We don't need to actually pull the package, as the package is expected to run offline anyways
+# So the package must include all source code it actually needs to build
+# Turns out this is a non-trivial problem. Just use a package.
+
+# Only build dependencies of the currently selected package if it is a Rust package
+# But ignore any errors
+RUN cargo build-deps || true
+
