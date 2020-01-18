@@ -14,6 +14,8 @@ RUN pip install -r /home/worker/requirements-worker.txt
 
 # User requested
 RUN pip install treys
+RUN pip install toposort
+RUN pip install torch torchvision
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -60,4 +62,3 @@ RUN cargo install cargo-build-deps -q
 # Only build dependencies of the currently selected package if it is a Rust package
 # But ignore any errors
 RUN cargo build-deps || true
-
