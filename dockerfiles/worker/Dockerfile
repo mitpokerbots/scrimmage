@@ -14,6 +14,8 @@ RUN pip install -r /home/worker/requirements-worker.txt
 
 # User requested
 RUN pip install treys
+RUN pip install toposort
+RUN pip install torch torchvision
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -46,3 +48,4 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/home/worker/.cargo/bin:${PATH}"
 RUN rustup install nightly
 RUN cargo install just
+RUN cargo install cargo-build-deps bitflags rand itertools approx clap
