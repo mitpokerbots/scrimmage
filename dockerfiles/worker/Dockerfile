@@ -62,3 +62,4 @@ RUN cargo install cargo-build-deps -q
 # Only build dependencies of the currently selected package if it is a Rust package
 # But ignore any errors
 RUN cargo build-deps || true
+RUN cargo build-deps --release || true
