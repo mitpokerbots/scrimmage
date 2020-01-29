@@ -23,7 +23,7 @@ services:
     build:
       path: .
       manifest: ./dockerfiles/worker/Dockerfile
-    command: celery -A scrimmage.celery_app worker --loglevel=info --concurrency=1
+    command: celery -A scrimmage.celery_app worker --loglevel=info --concurrency=1 --without-gossip
     environment:
       - PRODUCTION=True
       - SQLALCHEMY_DATABASE_URI
