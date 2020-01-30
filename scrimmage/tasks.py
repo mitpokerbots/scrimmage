@@ -303,6 +303,8 @@ def arbitrary_tournament_data_collection_function(gamelog):
         pnls.append(gamelog[j+1:k])
       else:
         pnls.append('nan')
+
+  matches = re.search(r'Straights ([0-9]+) ([0-9]+)', gamelog)
   return {
     "Ar": gamelog.count("A raises"),
     "Br": gamelog.count("B raises"),
@@ -314,6 +316,10 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "Bch": gamelog.count("B checks"),
     "Af": gamelog.count("A folds"),
     "Bf": gamelog.count("B folds"),
+    "Ash": gamelog.count("A shows"),
+    "Bsh": gamelog.count("B shows"),
+    "Ast": int(matches.group(1)),
+    "Bst": int(matches.group(2)),
     "pnls": pnls
   }
 
