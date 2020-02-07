@@ -380,7 +380,7 @@ def play_tournament_game_task(tournament_game_id):
 def spawn_tournament_task(tournament_id):
   tournament = Tournament.query.get(tournament_id)
   assert tournament.status == TournamentStatus.created
-
+  print("Updating tournament status.")
   tournament.status = TournamentStatus.spawning
   db.session.commit()
 
@@ -400,12 +400,17 @@ def spawn_tournament_task(tournament_id):
           'bot_b_id': participant_b.id,
           'status': GameStatus.created
         })
+  print("Mappings assembled.")
 
   random.shuffle(mappings)
   db.session.bulk_insert_mappings(TournamentGame, mappings)
   db.session.commit()
 
+  print("Mappings committed.")
+
   games = tournament.games
+
+  print("Spawning tasks.")
 
   for game in games:
     play_tournament_game_task.delay(game.id)
