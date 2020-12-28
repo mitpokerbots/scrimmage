@@ -3,8 +3,8 @@ services:
     build:
       path: .
       manifest: ./dockerfiles/web/Dockerfile
-    command: gunicorn scrimmage:app -w 3 -b 0.0.0.0:8000
-    domain: scrimmage.pokerbots.org
+    command: gunicorn --certfile=cert.crt --keyfile=cert.key scrimmage:app -w 3 -b 0.0.0.0:8000
+    domain: dev.pokerbots.org
     environment:
       - PRODUCTION=True
       - SQLALCHEMY_DATABASE_URI
@@ -15,10 +15,15 @@ services:
       - AWS_SECRET_ACCESS_KEY
       - S3_REGION
       - S3_BUCKET
-    port: 8000
+    health:
+      grace: 15
+      interval: 15
+      path: /check
+      timeout: 30
+    port: https:8000
     scale:
-      cpu: 512
-      memory: 1024
+      cpu: 256
+      memory: 512
   worker:
     build:
       path: .
@@ -35,9 +40,9 @@ services:
       - S3_REGION
       - S3_BUCKET
     scale:
-      cpu: 1024
-      memory: 1536
-  flower:
+      cpu: 512
+      memory: 1024
+  monitoring:
     build:
       path: .
       manifest: ./dockerfiles/web/Dockerfile
@@ -49,6 +54,11 @@ services:
       - CELERY_BROKER_URL
       - SECRET_KEY
       - FLOWER_BASIC_AUTH
+    health:
+      grace: 15
+      interval: 15
+      path: /healthcheck
+      timeout: 30
     port: 5555
     scale:
       cpu: 256

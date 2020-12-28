@@ -6,16 +6,8 @@ RUN useradd -ms /bin/bash worker
 RUN pip install --upgrade pip
 RUN pip install Cython
 
-COPY requirements.txt /home/worker/requirements.txt
-RUN pip install -r /home/worker/requirements.txt
-
 COPY requirements-worker.txt /home/worker/requirements-worker.txt
-RUN pip install -r /home/worker/requirements-worker.txt
-
-# User requested
-RUN pip install treys
-RUN pip install toposort
-RUN pip install torch torchvision
+RUN pip install -r /home/worker/requirements-worker.txt --no-cache-dir
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -24,9 +16,6 @@ RUN apt-get upgrade -y
 RUN apt-get install -yq default-jdk
 RUN apt-get install -yq gcc g++ scons autoconf libtool git libboost-all-dev libc6-dev
 RUN apt-get install -yq nano
-
-# User requested
-RUN apt-get -y install cmake
 
 COPY ./deps/BayesElo /home/worker/BayesElo
 WORKDIR /home/worker/BayesElo
@@ -41,13 +30,3 @@ COPY ./scrimmage /home/worker/scrimmage
 COPY ./deps/engine/engine.py /home/worker/engine/engine.py
 
 WORKDIR /home/worker
-
-# User requested
-
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/home/worker/.cargo/bin:${PATH}"
-RUN rustup install nightly
-RUN cargo install just
-RUN cargo install cargo-build-deps bitflags rand itertools approx clap
-RUN cargo build --offline -p bitflags -p rand -p itertools -p approx -p clap || true
-RUN cargo build --offline --release -p bitflags -p rand -p itertools -p approx -p clap || true
