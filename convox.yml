@@ -4,7 +4,7 @@ services:
       path: .
       manifest: ./dockerfiles/web/Dockerfile
     command: gunicorn --certfile=cert.crt --keyfile=cert.key scrimmage:app -w 3 -b 0.0.0.0:8000
-    domain: dev.pokerbots.org
+    domain: scrimmage.pokerbots.org
     environment:
       - PRODUCTION=True
       - SQLALCHEMY_DATABASE_URI
