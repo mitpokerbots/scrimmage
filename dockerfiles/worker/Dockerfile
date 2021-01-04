@@ -13,10 +13,11 @@ ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update -y
 RUN apt-get upgrade -y
+RUN apt-get install -yq software-properties-common
 RUN apt-get install -yq default-jdk
 RUN apt-get install -yq gcc g++ scons autoconf libtool git libboost-all-dev libc6-dev
 RUN apt-get install -yq nano
-RUN add-apt-repository universe
+RUN add-apt-repository "deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) universe" -y
 RUN apt-get install -yq libfmt-dev
 RUN apt-get install -yq cmake
 

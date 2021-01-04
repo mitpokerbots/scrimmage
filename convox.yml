@@ -40,7 +40,7 @@ services:
       - S3_REGION
       - S3_BUCKET
     scale:
-      cpu: 512
+      cpu: 1024
       memory: 1024
   monitoring:
     build:
