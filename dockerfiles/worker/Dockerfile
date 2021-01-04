@@ -27,6 +27,6 @@ USER worker
 
 # copy the rest of the app
 COPY ./scrimmage /home/worker/scrimmage
-COPY ./deps/engine/engine.py /home/worker/engine/engine.py
+COPY ./deps/engine-2021/engine.py /home/worker/engine/engine.py
 
 WORKDIR /home/worker
