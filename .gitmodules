@@ -1,3 +1,0 @@
-[submodule "deps/engine"]
-	path = deps/engine
-	url = git@github.com:mitpokerbots/engine-2020.git
