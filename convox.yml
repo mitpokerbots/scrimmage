@@ -41,7 +41,7 @@ services:
       - S3_BUCKET
     scale:
       cpu: 1024
-      memory: 1536
+      memory: 1024
   monitoring:
     build:
       path: .
