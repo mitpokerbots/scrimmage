@@ -291,7 +291,7 @@ def arbitrary_tournament_data_collection_function(gamelog):
   # Parse the interesting data you want from the gamelog and return it here (but keep it small!)
   pnls = []
   i = 0
-  for n in range(100, 1100, 100):
+  for n in range(100, 600, 100):
     i = gamelog.find('Round #' + str(n), i)
     if i == -1:
       pnls.append('nan')
