@@ -329,6 +329,8 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "Bf": gamelog.count("B folds"),
     "Ash": gamelog.count("A shows"),
     "Bsh": gamelog.count("B shows"),
+    "Asw": gamelog.count("A sweeps"),
+    "Bsw": gamelog.count("B sweeps"),
     "pnls_A": pnls_A,
     "pnls_B": pnls_B
   }
