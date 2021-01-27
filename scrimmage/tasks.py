@@ -305,6 +305,8 @@ def arbitrary_tournament_data_collection_function(gamelog):
         pnls.append('nan')
 
   return {
+    "Aai": gamelog.count("A went all in"),
+    "Bai": gamelog.count("B went all in"),
     "Ar": gamelog.count("A raises"),
     "Br": gamelog.count("B raises"),
     "Ab": gamelog.count("A bets"),
