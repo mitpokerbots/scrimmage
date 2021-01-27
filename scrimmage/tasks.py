@@ -289,20 +289,30 @@ def arbitrary_tournament_data_collection_function(gamelog):
   # This function collects data on games that are played in a tournament.
   # Gamelogs from tournaments are not saved since they can result in 200+GB of data, per tournament.
   # Parse the interesting data you want from the gamelog and return it here (but keep it small!)
-  pnls = []
+  pnls_B = []
+  pnls_A = []
   i = 0
   for n in range(100, 600, 100):
     i = gamelog.find('Round #' + str(n), i)
     if i == -1:
-      pnls.append('nan')
+      pnls_A.append('nan')
+      pnls_B.append('nan')
       i = 0
     else:
-      j = gamelog.find('(', i)
-      k = gamelog.find(')', i)
-      if j != -1 and k != -1:
-        pnls.append(gamelog[j+1:k])
+      b_start = gamelog.find('(', i) #team B is listed first on even number rounds (i.e. multiples of 100)
+      b_end = gamelog.find(')', i)
+      a_start = gamelog.find('(', b_end+1)
+      a_end = gamelog.find(')', b_end+1)
+      
+      if b_start != -1 and b_end != -1:
+        pnls_B.append(gamelog[b_start+1:b_end])
       else:
-        pnls.append('nan')
+        pnls_B.append('nan')
+      
+      if a_start != -1 and a_end != -1:
+        pnls_A.append(gamelog[a_start+1:a_end])
+      else:
+        pnls_A.append('nan')
 
   return {
     "Aai": gamelog.count("A went all in"),
@@ -319,7 +329,8 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "Bf": gamelog.count("B folds"),
     "Ash": gamelog.count("A shows"),
     "Bsh": gamelog.count("B shows"),
-    "pnls": pnls
+    "pnls_A": pnls_A,
+    "pnls_B": pnls_B
   }
 
 
