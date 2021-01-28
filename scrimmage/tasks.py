@@ -324,6 +324,8 @@ def arbitrary_tournament_data_collection_function(gamelog):
         pnls_A.append('nan')
 
   return {
+    "Aai": gamelog.count("A went all in"),
+    "Bai": gamelog.count("B went all in"),
     "Ar": gamelog.count("A raises"),
     "Br": gamelog.count("B raises"),
     "Ab": gamelog.count("A bets"),
@@ -336,6 +338,8 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "Bf": gamelog.count("B folds"),
     "Ash": gamelog.count("A shows"),
     "Bsh": gamelog.count("B shows"),
+    "Asw": gamelog.count("A sweeps"),
+    "Bsw": gamelog.count("B sweeps"),
     "pnls_A": pnls_A,
     "pnls_B": pnls_B,
     "table_1_scores": _get_table_scores(gamelog, 1),
