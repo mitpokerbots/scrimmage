@@ -94,6 +94,15 @@ def _get_scores(game_log):
   return bot_a_score, bot_b_score
 
 
+def _get_table_scores(game_log, table_num):
+  matches = re.search(r'Table {}, [^ ]+ \(([\-0-9]+)\), [^ ]+ \(([\-0-9]+)\)'.format(table_num), game_log)
+  if matches is None: return 0, 0
+  bot_a_score = int(matches.group(1))
+  bot_b_score = int(matches.group(2))
+
+  return bot_a_score, bot_b_score
+
+
 def _get_winner(bot_a_score, bot_b_score):
   if bot_a_score == bot_b_score:
     return 'ab'[ord(os.urandom(1)) % 2]
@@ -328,7 +337,10 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "Ash": gamelog.count("A shows"),
     "Bsh": gamelog.count("B shows"),
     "pnls_A": pnls_A,
-    "pnls_B": pnls_B
+    "pnls_B": pnls_B,
+    "table_1_scores": _get_table_scores(gamelog, 1),
+    "table_2_scores": _get_table_scores(gamelog, 2),
+    "table_3_scores": _get_table_scores(gamelog, 3)
   }
 
 
