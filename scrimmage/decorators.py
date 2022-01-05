@@ -9,7 +9,7 @@ import humanize
 from pytz import timezone
 import datetime
 
-ADMINS = {'jserrino', 'nilai', 'davidja', 'glram', 'sotremba', 'shreyass', 'andyzhu', 'haijiaw', 'mattmcm', 'scyang'}
+ADMINS = {'jserrino', 'nilai', 'davidja', 'glram', 'sotremba', 'shreyass', 'andyzhu', 'haijiaw', 'mattmcm', 'scyang', 'garrud4', 'maxt114'}
 
 def is_admin(kerberos):
   return kerberos in ADMINS or kerberos in [kerb.lower().strip() for kerb in settings['extra_admins'].split(',')]
