@@ -14,8 +14,8 @@ BUILD_TIMEOUT = 20.
 CONNECT_TIMEOUT = 10.
 QUIT_TIMEOUT = 10.
 
-FLOP_PERCENT = 0.1
-TURN_PERCENT = 0.05
+FLOP_PERCENT = 0.3
+TURN_PERCENT = 0.2
 NUM_ROUNDS = {{ game_num_hands }}
 STARTING_STACK = {{ game_starting_stack }}
 BIG_BLIND = {{ game_big_blind }}
