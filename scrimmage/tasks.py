@@ -94,6 +94,12 @@ def _get_scores(game_log):
   return bot_a_score, bot_b_score
 
 
+def _get_swapped_round_scores(game_log, player_name):
+  matches = re.findall(rf'{player_name} \(swapped\) awarded ([\-0-9]+)', game_log)
+  if matches == []: return 0
+  return sum(map(int, matches))
+
+
 def _get_winner(bot_a_score, bot_b_score):
   if bot_a_score == bot_b_score:
     return 'ab'[ord(os.urandom(1)) % 2]
@@ -330,7 +336,9 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "Ash": gamelog.count("A shows"),
     "Bsh": gamelog.count("B shows"),
     "pnls_A": pnls_A,
-    "pnls_B": pnls_B
+    "pnls_B": pnls_B,
+    "pnls_A_sw": _get_swapped_round_scores(gamelog, "A"),
+    "pnls_B_sw": _get_swapped_round_scores(gamelog, "B")
   }
 
 
