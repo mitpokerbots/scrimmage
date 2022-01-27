@@ -94,13 +94,16 @@ def _get_scores(game_log):
   return bot_a_score, bot_b_score
 
 
-def _get_table_scores(game_log, table_num):
-  matches = re.search(r'Table {}, [^ ]+ \(([\-0-9]+)\), [^ ]+ \(([\-0-9]+)\)'.format(table_num), game_log)
-  if matches is None: return 0, 0
-  bot_a_score = int(matches.group(1))
-  bot_b_score = int(matches.group(2))
+def _get_swapped_round_scores(game_log, player_name):
+  matches = re.findall(rf'{player_name} \(swapped\) awarded ([\-0-9]+)', game_log)
+  if matches == []: return 0
+  return sum(map(int, matches))
 
-  return bot_a_score, bot_b_score
+
+def _get_bet_evs(game_log, player_name, street_name):
+  matches = re.search(rf'{player_name} {street_name} bets EV: ([\-0-9]+)', game_log)
+  if matches is None: return 0
+  return int(matches.group(1))
 
 
 def _get_winner(bot_a_score, bot_b_score):
@@ -301,7 +304,7 @@ def arbitrary_tournament_data_collection_function(gamelog):
   pnls_B = []
   pnls_A = []
   i = 0
-  for n in range(100, 600, 100):
+  for n in range(100, 1100, 100):
     i = gamelog.find('Round #' + str(n), i)
     if i == -1:
       pnls_A.append('nan')
@@ -338,13 +341,14 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "Bf": gamelog.count("B folds"),
     "Ash": gamelog.count("A shows"),
     "Bsh": gamelog.count("B shows"),
-    "Asw": gamelog.count("A sweeps"),
-    "Bsw": gamelog.count("B sweeps"),
     "pnls_A": pnls_A,
     "pnls_B": pnls_B,
-    "table_1_scores": _get_table_scores(gamelog, 1),
-    "table_2_scores": _get_table_scores(gamelog, 2),
-    "table_3_scores": _get_table_scores(gamelog, 3)
+    "pnls_A_sw": _get_swapped_round_scores(gamelog, "A"),
+    "pnls_B_sw": _get_swapped_round_scores(gamelog, "B"),
+    "ev_A_flop": _get_bet_evs(gamelog, "A", "flop"),
+    "ev_B_flop": _get_bet_evs(gamelog, "B", "flop"),
+    "ev_A_turn": _get_bet_evs(gamelog, "A", "turn"),
+    "ev_B_turn": _get_bet_evs(gamelog, "B", "turn")
   }
 
 
