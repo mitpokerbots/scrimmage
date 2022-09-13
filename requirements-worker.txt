@@ -29,7 +29,7 @@ Flask-Script==2.0.6
 Flask-SQLAlchemy==2.4.4
 Flask-SSLify==0.1.5
 flatbuffers==1.12
-flower==0.9.7
+flower==1.2.0
 funcsigs==1.0.2
 future==0.18.2
 gast==0.3.3
