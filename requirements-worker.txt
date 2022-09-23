@@ -64,7 +64,7 @@ pandas==1.2.0
 pbr==5.5.1
 Pillow==8.0.1
 prometheus-client==0.8.0
-protobuf==3.14.0
+protobuf==3.18.3
 psycopg2==2.8.6
 psycopg2-binary==2.8.6
 pyasn1==0.4.8
