@@ -100,7 +100,7 @@ def _get_swapped_round_scores(game_log, player_name):
   return sum(map(int, matches))
 
 def _get_prerun_round_scores(game_log, player_name):
-    matches = re.findall(rf'{player_name} prerun awarded ([\-0-9]+)', game_log)
+    matches = re.findall(rf'{player_name} won ([\-0-9]+)', game_log)
     if matches == []: return 0
     return sum(map(int, matches))
 
