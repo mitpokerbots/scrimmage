@@ -99,7 +99,7 @@ def _get_swapped_round_scores(game_log, player_name):
   if matches == []: return 0
   return sum(map(int, matches))
 
-def _get_prerun_round_scores(game_log, player_name):
+def _get_run_round_scores(game_log, player_name):
     matches = re.findall(rf'{player_name} won ([\-0-9]+)', game_log)
     if matches == []: return 0
     return sum(map(int, matches))
@@ -349,8 +349,8 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "pnls_B": pnls_B,
     "pnls_A_sw": _get_swapped_round_scores(gamelog, "A"),
     "pnls_B_sw": _get_swapped_round_scores(gamelog, "B"),
-    "pnls_A_prerun": _get_prerun_round_scores(gamelog, "A"),
-    "pnls_B_prerun": _get_prerun_round_scores(gamelog, "B"),
+    "pnls_A_prerun": _get_run_round_scores(gamelog, "A"),
+    "pnls_B_prerun": _get_run_round_scores(gamelog, "B"),
     "ev_A_flop": _get_bet_evs(gamelog, "A", "flop"),
     "ev_B_flop": _get_bet_evs(gamelog, "B", "flop"),
     "ev_A_turn": _get_bet_evs(gamelog, "A", "turn"),
