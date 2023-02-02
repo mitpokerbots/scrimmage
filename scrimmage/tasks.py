@@ -100,9 +100,9 @@ def _get_swapped_round_scores(game_log, player_name):
   return sum(map(int, matches))
 
 def _get_run_round_scores(game_log, player_name):
-    matches = re.findall(rf'{player_name} won ([\-0-9]+)', game_log)
-    if matches == []: return 0
-    return sum(map(int, matches))
+  matches = re.findall(rf'{player_name} won ([\-0-9]+)', game_log)
+  if matches == []: return 0
+  return sum(map(int, matches))
 
 def _get_bet_evs(game_log, player_name, street_name):
   matches = re.search(rf'{player_name} {street_name} bets EV: ([\-0-9]+)', game_log)
