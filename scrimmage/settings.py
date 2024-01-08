@@ -14,7 +14,7 @@ DEFAULTS = {
   'maximum_player_log_file_size': '10485760', # 10*1024*1024
   'game_big_blind': '2',
   'game_small_blind': '1',
-  'game_starting_stack': '200',
+  'game_starting_stack': '400',
   'game_num_hands': '1000',
   'game_time_restriction': '30',
   'down_challenges_affect_elo': 'true',
