@@ -94,20 +94,11 @@ def _get_scores(game_log):
   return bot_a_score, bot_b_score
 
 
-def _get_swapped_round_scores(game_log, player_name):
-  matches = re.findall(rf'{player_name} (\swapped\) awarded ([\-0-9]+)', game_log)
-  if matches == []: return 0
-  return sum(map(int, matches))
 
 def _get_bids(game_log, player_name):
   matches = re.findall(rf'{player_name} bids ([\-0-9]+)', game_log)
   if matches == []: return 0
   return sum(map(int, matches))/len(matches)
-
-def _get_bet_evs(game_log, player_name, street_name):
-  matches = re.search(rf'{player_name} {street_name} bets EV: ([\-0-9]+)', game_log)
-  if matches is None: return 0
-  return int(matches.group(1))
 
 
 def _get_winner(bot_a_score, bot_b_score):
@@ -347,14 +338,8 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "Bsh": gamelog.count("B shows"),
     "pnls_A": pnls_A,
     "pnls_B": pnls_B,
-    "pnls_A_sw": _get_swapped_round_scores(gamelog, "A"),
-    "pnls_B_sw": _get_swapped_round_scores(gamelog, "B"),
     "avg_bid_A": _get_bids(gamelog, "A"),
     "avg_bid_B": _get_bids(gamelog, "B"),
-    "ev_A_flop": _get_bet_evs(gamelog, "A", "flop"),
-    "ev_B_flop": _get_bet_evs(gamelog, "B", "flop"),
-    "ev_A_turn": _get_bet_evs(gamelog, "A", "turn"),
-    "ev_B_turn": _get_bet_evs(gamelog, "B", "turn")
   }
 
 
