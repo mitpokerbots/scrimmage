@@ -299,6 +299,23 @@ def arbitrary_tournament_data_collection_function(gamelog):
   pnls_B = []
   pnls_A = []
   i = 0
+
+  log_split_into_rounds = gamelog.split("Round #")
+  # count number of times a team wins despite
+  # the other player winning the auction
+  A_win_auction_loss = 0
+  B_win_auction_loss = 0
+  for curr_round_string in log_split_into_rounds:
+    B_wins_auction = "B won the auction" in curr_round_string
+    A_wins_auction = "A won the auction" in curr_round_string
+    if A_wins_auction and B_wins_auction:
+      continue
+    elif A_wins_auction and ("A awarded -" in curr_round_string):
+      B_win_auction_loss += 1
+    elif B_wins_auction and ("B awarded -" in curr_round_string):
+      A_win_auction_loss += 1
+
+
   for n in range(100, 1100, 100):
     i = gamelog.find('Round #' + str(n), i)
     if i == -1:
@@ -340,6 +357,10 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "pnls_B": pnls_B,
     "avg_bid_A": _get_bids(gamelog, "A"),
     "avg_bid_B": _get_bids(gamelog, "B"),
+    "A_auction_win": gamelog.count("A won the auction"),
+    "B_auction_win": gamelog.count("B won the auction"),
+    "A_win_auction_loss": A_win_auction_loss,
+    "B_win_auction_loss": B_win_auction_loss,
   }
 
 
