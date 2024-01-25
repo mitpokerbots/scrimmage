@@ -355,12 +355,12 @@ def arbitrary_tournament_data_collection_function(gamelog):
     "Bsh": gamelog.count("B shows"),
     "pnls_A": pnls_A,
     "pnls_B": pnls_B,
-    "avg_bid_A": _get_bids(gamelog, "A"),
-    "avg_bid_B": _get_bids(gamelog, "B"),
-    "A_auction_win": gamelog.count("A won the auction"),
-    "B_auction_win": gamelog.count("B won the auction"),
-    "A_win_auction_loss": A_win_auction_loss,
-    "B_win_auction_loss": B_win_auction_loss,
+    "bid_A": _get_bids(gamelog, "A"),
+    "bid_B": _get_bids(gamelog, "B"),
+    "A_bid_W": gamelog.count("A won the auction"),
+    "B_bid_W": gamelog.count("B won the auction"),
+    "A_W_bid_L": A_win_auction_loss,
+    "B_W_bid_L": B_win_auction_loss,
   }
 
 
