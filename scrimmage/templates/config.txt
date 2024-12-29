@@ -10,7 +10,7 @@ PLAYER_LOG_SIZE_LIMIT = {{ player_log_size_limit }}
 
 ENFORCE_GAME_CLOCK = True
 STARTING_GAME_CLOCK = {{ game_time_restriction }}
-BUILD_TIMEOUT = 20.
+BUILD_TIMEOUT = 120.
 CONNECT_TIMEOUT = 10.
 QUIT_TIMEOUT = 10.
 
