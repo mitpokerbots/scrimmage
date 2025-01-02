@@ -16,7 +16,7 @@ DEFAULTS = {
   'game_small_blind': '1',
   'game_starting_stack': '400',
   'game_num_hands': '1000',
-  'game_time_restriction': '30',
+  'game_time_restriction': '60',
   'down_challenges_affect_elo': 'true',
   'down_challenges_require_accept': 'true',
   'player_log_size_limit': 524288

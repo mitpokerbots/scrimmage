@@ -7,7 +7,7 @@ class Config(object):
   SQLALCHEMY_TRACK_MODIFICATIONS = False
   AUTH_URL_BASE = 'https://pokerbots.scripts.mit.edu:444/scrimmage/auth.php'
   USER_INFO_URL_BASE = 'https://pokerbots.scripts.mit.edu/scrimmage/info.py'
-  MAX_CONTENT_LENGTH = 100 * 1024 * 1024
+  MAX_CONTENT_LENGTH = 2000 * 1024 * 1024
 
 class ProdConfig(Config):
   ENV = 'production'
