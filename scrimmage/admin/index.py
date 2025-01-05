@@ -4,7 +4,7 @@ from collections import defaultdict
 from scrimmage import app, db
 from scrimmage.decorators import admin_required, set_flash
 from scrimmage.helpers import get_s3_object
-from scrimmage.models import Game, GameStatus, Announcement, Tournament
+from scrimmage.models import Game, GameStatus, Announcement, Tournament, Team
 
 @app.route('/admin/')
 @admin_required
@@ -37,7 +37,23 @@ def admin_export_to_playground():
   result['teams'].sort(key=lambda t: t['name'])
   return jsonify(result)
 
+@app.route('/admin/export_to_playground_current', methods=['GET'])
+@admin_required
+def admin_export_to_playground_current():
+  result = { 'teams': [] }
+  for team in Team.query.all():
+    active_bots = team.active_bots()
+    current_bot = team.current_bot
+    result['teams'].append({
+      'name': team.name,
+      'bots': [
+          {'name': bot.name + (' (current)' if bot == current_bot else ''), 's3_key': bot.s3_key} 
+          for bot in active_bots
+      ]
+    })
 
+  result['teams'].sort(key=lambda t: t['name'])
+  return jsonify(result)
 
 
 @app.route('/admin/announcements', methods=['GET', 'POST'])
