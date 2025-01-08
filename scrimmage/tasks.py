@@ -290,6 +290,10 @@ def play_game_task(game_id):
     opponent_name = "B"
 
     if opponent_bot_id == challenger_bot_id:
+        db.session.rollback()
+        game = Game.query.get(game_id)
+        game.status = GameStatus.internal_error
+        db.session.commit()
         return
 
     try:
