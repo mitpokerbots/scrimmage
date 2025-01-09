@@ -19,7 +19,7 @@ chardet==4.0.0
 click==7.1.2
 coolname==1.1.0
 Cython==0.29.21
-deuces==0.2
+deuces==0.2.1
 docutils==0.16
 enum34==1.1.10
 eval7==0.1.8
