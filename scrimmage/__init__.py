@@ -1,10 +1,11 @@
 import os
+os.environ['FLASK_APP'] = 'scrimmage'
 from celery import Celery
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
 from flask_sslify import SSLify
 from healthcheck import HealthCheck, EnvironmentDump
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 config_object_str = 'scrimmage.config.ProdConfig' if os.environ.get('PRODUCTION', False) else 'scrimmage.config.DevConfig'
