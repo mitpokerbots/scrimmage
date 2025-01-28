@@ -124,6 +124,10 @@ def _get_bet_evs(game_log, player_name, street_name):
         return 0
     return int(matches.group(1))
 
+def _get_bounty_hits(game_log, player_name):
+    matches = re.findall(rf"{player_name} hits their bounty", game_log)
+    return len(matches)
+
 
 def _get_winner(bot_a_score, bot_b_score):
     if bot_a_score == bot_b_score:
@@ -417,6 +421,8 @@ def arbitrary_tournament_data_collection_function(gamelog):
         "pnls_B": pnls_B,
         "bid_A": _get_bids(gamelog, "A"),
         "bid_B": _get_bids(gamelog, "B"),
+        "bounty_hits_A": _get_bounty_hits(gamelog, "A"),
+        "bounty_hits_B": _get_bounty_hits(gamelog, "B"),
         "A_bid_W": gamelog.count("A won the auction"),
         "B_bid_W": gamelog.count("B won the auction"),
         "A_W_bid_L": A_win_auction_loss,
