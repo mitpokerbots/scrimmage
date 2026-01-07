@@ -1,5 +1,6 @@
 import os
 from celery import Celery
+from kombu import Exchange, Queue
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -26,9 +27,25 @@ def make_celery(flask_app):
     #   AMQPNotImplementedError: Basic.consume: (540) NOT_IMPLEMENTED -
     #   queue 'celery' in vhost '/' does not support global qos
     # Force per-consumer QoS here to keep workers connected.
-    broker_transport_opts = celery.conf.get('broker_transport_options', {}) or {}
+    broker_transport_opts = getattr(celery.conf, 'broker_transport_options', {}) or {}
     broker_transport_opts.update({'global_qos': False})
     celery.conf.broker_transport_options = broker_transport_opts
+
+    # Explicitly declare the default queue as a classic queue (not quorum),
+    # so it fully supports QoS and works with older Celery/kombu versions.
+    # Use a new queue name to avoid clashing with the existing quorum queue.
+    default_exchange = Exchange('celery', type='direct')
+    celery.conf.task_default_queue = 'celery-classic'
+    celery.conf.task_default_exchange = 'celery'
+    celery.conf.task_default_routing_key = 'celery'
+    celery.conf.task_queues = (
+        Queue(
+            'celery-classic',
+            default_exchange,
+            routing_key='celery',
+            queue_arguments={'x-queue-type': 'classic'},
+        ),
+    )
     TaskBase = celery.Task
     class ContextTask(TaskBase):
         abstract = True
