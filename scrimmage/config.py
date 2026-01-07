@@ -20,6 +20,13 @@ class ProdConfig(Config):
   S3_REGION = os.getenv('S3_REGION', None)
   S3_BUCKET = os.getenv('S3_BUCKET', None)
   PREFERRED_URL_SCHEME = 'https'
+  # RabbitMQ on AWS MQ does not support "global" QoS on queues like the default
+  # 'celery' queue. Celery 4 enables global QoS by default which leads to:
+  #   AMQPNotImplementedError: Basic.consume: (540) NOT_IMPLEMENTED - queue 'celery'
+  #   in vhost '/' does not support global qos
+  # Disabling global_qos fixes this.
+  broker_transport_options = {'global_qos': False}
+  CELERY_BROKER_TRANSPORT_OPTIONS = {'global_qos': False}
 
 class DevConfig(Config):
   ENV = 'development'

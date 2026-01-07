@@ -22,7 +22,7 @@ Cython==0.29.21
 deuces==0.2.1
 docutils==0.16
 enum34==1.1.10
-eval7==0.1.8
+pkrbot==1.0.4
 Flask==1.1.2
 Flask-Migrate==2.5.3
 Flask-Script==2.0.6

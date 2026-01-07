@@ -19,6 +19,16 @@ envdump = EnvironmentDump(app, "/environment")
 def make_celery(flask_app):
     celery = Celery(flask_app.import_name, broker=flask_app.config['CELERY_BROKER_URL'])
     celery.conf.update(flask_app.config)
+
+    # AWS MQ RabbitMQ uses quorum queues for the default "celery" queue.
+    # Quorum queues do NOT support "global" QoS. Celery 4 enables global
+    # QoS by default which causes:
+    #   AMQPNotImplementedError: Basic.consume: (540) NOT_IMPLEMENTED -
+    #   queue 'celery' in vhost '/' does not support global qos
+    # Force per-consumer QoS here to keep workers connected.
+    broker_transport_opts = celery.conf.get('broker_transport_options', {}) or {}
+    broker_transport_opts.update({'global_qos': False})
+    celery.conf.broker_transport_options = broker_transport_opts
     TaskBase = celery.Task
     class ContextTask(TaskBase):
         abstract = True
