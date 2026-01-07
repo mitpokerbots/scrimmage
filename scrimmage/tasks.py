@@ -66,9 +66,11 @@ def _safe_name(name):
     return name
 
 
-def _download_and_verify(bot, tmp_dir):
+def _download_and_verify(bot, tmp_dir, bot_name):
     bot_dir = os.path.join(tmp_dir, binascii.hexlify(os.urandom(10)).decode())
     os.mkdir(bot_dir)
+    subprocess.run(["sudo", "chown", "-R", f"{bot_name}:{bot_name}", bot_dir])
+    subprocess.run(["sudo", "chmod", "700", bot_dir])
     bot_download_dir = os.path.join(bot_dir, "download")
     os.mkdir(bot_download_dir)
     bot_extract_dir = os.path.join(bot_dir, "source")
@@ -179,8 +181,8 @@ def _read_logfile(filename, log_filesize):
 
 def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
     with tempfile.TemporaryDirectory() as tmp_dir:
-        is_valid_a_bot, a_path = _download_and_verify(bot_a, tmp_dir)
-        is_valid_b_bot, b_path = _download_and_verify(bot_b, tmp_dir)
+        is_valid_a_bot, a_path = _download_and_verify(bot_a, tmp_dir, "A")
+        is_valid_b_bot, b_path = _download_and_verify(bot_b, tmp_dir, "B")
 
         if not is_valid_a_bot and not is_valid_b_bot:
             # These are actually logs

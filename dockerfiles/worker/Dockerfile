@@ -28,10 +28,12 @@ RUN make
 RUN cp /home/worker/BayesElo/bayeselo /usr/bin/bayeselo
 RUN rm -rf /home/worker/BayesElo
 
-USER worker
-
-# copy the rest of the app
+# copy the rest of the app (as root to set permissions)
 COPY ./scrimmage /home/worker/scrimmage
+RUN mkdir -p /home/worker/engine
 COPY ./deps/engine-2026/engine.py /home/worker/engine/engine.py
+RUN chown -R worker:worker /home/worker
+
+USER worker
 
 WORKDIR /home/worker
