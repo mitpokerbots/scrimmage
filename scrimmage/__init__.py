@@ -46,6 +46,22 @@ def make_celery(flask_app):
             queue_arguments={'x-queue-type': 'classic'},
         ),
     )
+    
+    # Configure task time limits to prevent stuck games
+    # Hard limit: 20 minutes (1200s) - task is killed after this
+    # Soft limit: 18 minutes (1080s) - task receives SoftTimeLimitExceeded exception
+    celery.conf.task_time_limit = 1200  # 20 minutes hard limit
+    celery.conf.task_soft_time_limit = 1080  # 18 minutes soft limit
+    
+    # Configure periodic tasks (beat schedule)
+    # Run cleanup task every 5 minutes to detect stuck games
+    celery.conf.beat_schedule = {
+        'cleanup-stuck-games': {
+            'task': 'scrimmage.tasks.cleanup_stuck_games_task',
+            'schedule': 300.0,  # Run every 5 minutes
+        },
+    }
+    
     TaskBase = celery.Task
     class ContextTask(TaskBase):
         abstract = True

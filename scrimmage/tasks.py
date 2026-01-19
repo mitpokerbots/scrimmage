@@ -11,6 +11,7 @@ import zipfile
 
 import boto3
 import jinja2
+from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy.orm import raiseload
 
 from scrimmage import app, celery_app, db
@@ -222,9 +223,16 @@ def _run_bots(bot_a, bot_a_name, bot_b, bot_b_name):
             )
             config_file.write(config_txt)
 
-        subprocess.check_call(
-            ["python", ENGINE_PATH], cwd=game_dir, env=_get_environment()
-        )
+        # Calculate timeout: build (180s * 2 bots) + connect (10s * 2) + game (60s * 2 players) 
+        # + quit (10s * 2) + buffer = ~600s, use 900s (15 min) for safety
+        # Add extra time based on number of hands (1000 hands default)
+        game_timeout = 900 + (int(settings["game_num_hands"]) * 0.1)  # 0.1s per hand buffer
+        try:
+            subprocess.check_call(
+                ["python", ENGINE_PATH], cwd=game_dir, env=_get_environment(), timeout=game_timeout
+            )
+        except subprocess.TimeoutExpired:
+            raise Exception(f"Game engine timed out after {game_timeout} seconds")
 
         with open(os.path.join(game_dir, "gamelog.txt"), "r") as game_log_file:
             game_log = game_log_file.read()
@@ -276,7 +284,7 @@ def _multiple_with_for_update(cls, pks):
     return tuple([mapping[pk] for pk in pks])
 
 
-@celery_app.task(ignore_result=True)
+@celery_app.task(ignore_result=True, time_limit=1200, soft_time_limit=1080)
 def play_game_task(game_id):
     game = Game.query.get(game_id)
     assert game.status == GameStatus.created or game.status == GameStatus.internal_error
@@ -347,6 +355,13 @@ def play_game_task(game_id):
 
         db.session.commit()
 
+    except SoftTimeLimitExceeded:
+        # Task is approaching time limit, mark as error and let it finish
+        db.session.rollback()
+        game = Game.query.get(game_id)
+        game.status = GameStatus.internal_error
+        db.session.commit()
+        raise
     except:
         db.session.rollback()
         game = Game.query.get(game_id)
@@ -434,7 +449,7 @@ def arbitrary_tournament_data_collection_function(gamelog):
     }
 
 
-@celery_app.task(ignore_result=True)
+@celery_app.task(ignore_result=True, time_limit=1200, soft_time_limit=1080)
 def play_tournament_game_task(tournament_game_id):
     game = TournamentGame.query.get(tournament_game_id)
     assert game.status == GameStatus.created or game.status == GameStatus.internal_error
@@ -486,6 +501,13 @@ def play_tournament_game_task(tournament_game_id):
 
         db.session.commit()
 
+    except SoftTimeLimitExceeded:
+        # Task is approaching time limit, mark as error and let it finish
+        db.session.rollback()
+        game = TournamentGame.query.get(tournament_game_id)
+        game.status = GameStatus.internal_error
+        db.session.commit()
+        raise
     except:
         db.session.rollback()
         game = TournamentGame.query.get(tournament_game_id)
@@ -591,3 +613,53 @@ def calculate_tournament_elo_task(tournament_id):
 
     tournament.status = TournamentStatus.done
     db.session.commit()
+
+
+@celery_app.task(ignore_result=True)
+def cleanup_stuck_games_task():
+    """
+    Periodic task to detect and mark games that have been stuck in 'in_progress' 
+    status for too long (more than 25 minutes) as internal_error.
+    This handles cases where the Celery task was killed or crashed without updating status.
+    """
+    from datetime import datetime, timedelta
+    
+    # Games stuck for more than 25 minutes (longer than task timeout)
+    stuck_threshold = datetime.now() - timedelta(minutes=25)
+    
+    # Find regular games stuck in progress
+    stuck_games = Game.query.filter(
+        Game.status == GameStatus.in_progress,
+        Game.create_time < stuck_threshold
+    ).all()
+    
+    stuck_count = 0
+    for game in stuck_games:
+        try:
+            game.status = GameStatus.internal_error
+            stuck_count += 1
+        except Exception as e:
+            print(f"Error marking stuck game {game.id} as failed: {e}")
+            db.session.rollback()
+            continue
+    
+    # Find tournament games stuck in progress
+    stuck_tournament_games = TournamentGame.query.filter(
+        TournamentGame.status == GameStatus.in_progress,
+        TournamentGame.create_time < stuck_threshold
+    ).all()
+    
+    for game in stuck_tournament_games:
+        try:
+            game.status = GameStatus.internal_error
+            stuck_count += 1
+        except Exception as e:
+            print(f"Error marking stuck tournament game {game.id} as failed: {e}")
+            db.session.rollback()
+            continue
+    
+    if stuck_count > 0:
+        db.session.commit()
+        print(f"Marked {stuck_count} stuck games as internal_error")
+    
+    return stuck_count

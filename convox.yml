@@ -63,3 +63,21 @@ services:
     scale:
       cpu: 256
       memory: 512
+  beat:
+    build:
+      path: .
+      manifest: ./dockerfiles/worker/Dockerfile
+    command: celery -A scrimmage.celery_app beat --loglevel=info
+    environment:
+      - PRODUCTION=True
+      - SQLALCHEMY_DATABASE_URI
+      - CELERY_BROKER_URL
+      - SECRET_KEY
+      - AUTH_KEY
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - S3_REGION
+      - S3_BUCKET
+    scale:
+      cpu: 256
+      memory: 256
