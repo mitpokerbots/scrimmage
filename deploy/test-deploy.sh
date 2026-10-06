@@ -17,6 +17,8 @@ FAILED=0
 step "run deploy/install.sh"
 apt-get update -qq && apt-get install -yqq git curl >/dev/null
 cp -a /src /opt/scrimmage && rm -rf /opt/scrimmage/.venv /opt/scrimmage/data
+# On servers root clones the repo; the mount keeps the host user's uid, which git refuses.
+chown -R root:root /opt/scrimmage
 mkdir -p /stubs /etc/scrimmage
 for command in systemctl docker; do
   printf '#!/bin/sh\necho "[stub] %s $*"\n' "$command" > "/stubs/$command"
