@@ -8,8 +8,12 @@ server bakes a machine image (AMI) from the worker launch template instead:
   1. launch a throwaway machine from the template with SCRIMMAGE_BAKE set:
      deploy/install-worker.sh installs everything for this commit, then powers
      the machine off (on failure, it stays up so its console can be read);
-  2. image it, and add a template version that uses the image. The fleet
-     launches the template's newest version, so new machines boot from it.
+  2. image it, add a template version that uses the image, and point the
+     fleet's Auto Scaling group at that version, so new machines boot from it.
+
+(CloudFormation can't point the group at "the newest version" itself, and
+resets it to its own version when a stack update changes the template; the
+next bake, after the next deploy, points it back.)
 
 Machines booted from an image of an older commit still work, as they catch up
 at boot, so a failed bake only costs boot time.
@@ -44,8 +48,10 @@ def with_bake_flag(user_data_b64: str) -> str:
 
 
 class Baker:
-    def __init__(self, ec2: Any, *, subnet: str, commit: str) -> None:
+    def __init__(self, ec2: Any, autoscaling: Any, *, group: str, subnet: str, commit: str) -> None:
         self.ec2 = ec2
+        self.autoscaling = autoscaling
+        self.group = group
         self.subnet = subnet
         self.commit = commit
 
@@ -59,9 +65,11 @@ class Baker:
         """Bake ``template``'s image for this commit. Returns the AMI id (None: already baked)."""
         versions = self._versions(template)
         description = f"{BAKED} {self.commit}"
-        if any(v.get("VersionDescription") == description for v in versions):
-            log.info("%s: already baked for %s", template, self.commit[:12])
-            return None
+        for version in versions:
+            if version.get("VersionDescription") == description:
+                log.info("%s: already baked for %s", template, self.commit[:12])
+                self._use(version["VersionNumber"])
+                return None
         # The template as CloudFormation defined it: the newest version not baked by us.
         source = max(
             (v for v in versions if not v.get("VersionDescription", "").startswith(BAKED)),
@@ -106,15 +114,33 @@ class Baker:
             )
         finally:
             self.ec2.terminate_instances(InstanceIds=[instance])
-        self.ec2.create_launch_template_version(
+        created = self.ec2.create_launch_template_version(
             LaunchTemplateName=template,
             SourceVersion=str(source["VersionNumber"]),
             VersionDescription=description,
             LaunchTemplateData={"ImageId": image},
         )
+        self._use(created["LaunchTemplateVersion"]["VersionNumber"])
         log.info("%s: new machines boot from %s", template, image)
         self._remove_old(template, keep=image)
         return str(image)
+
+    def _use(self, version: int) -> None:
+        """Point the fleet at a template version, keeping the rest of its launch policy."""
+        group = self.autoscaling.describe_auto_scaling_groups(AutoScalingGroupNames=[self.group])[
+            "AutoScalingGroups"
+        ][0]
+        policy = group["MixedInstancesPolicy"]
+        spec = policy["LaunchTemplate"]["LaunchTemplateSpecification"]
+        if spec.get("Version") == str(version):
+            return
+        spec["Version"] = str(version)
+        if "LaunchTemplateId" in spec:
+            spec.pop("LaunchTemplateName", None)  # the API takes one or the other
+        self.autoscaling.update_auto_scaling_group(
+            AutoScalingGroupName=self.group, MixedInstancesPolicy=policy
+        )
+        log.info("%s: launches template version %d", self.group, version)
 
     def _stack_of(self, template: str) -> str:
         found = self.ec2.describe_launch_templates(LaunchTemplateNames=[template])
@@ -159,15 +185,21 @@ class Baker:
                     self.ec2.delete_snapshot(SnapshotId=snapshot)
 
 
-def main(commit: str, region: str) -> int:
+def main(commit: str, region: str, group: str) -> int:
     template = os.environ.get("WORKER_TEMPLATE", "")
     subnet = os.environ.get("BAKE_SUBNET", "")
-    if not template or not subnet:
-        log.info("No worker template configured; nothing to bake")
+    if not template or not subnet or not group:
+        log.info("No worker fleet configured; nothing to bake")
         return 0
     import boto3  # noqa: PLC0415 -- only needed on AWS
 
-    baker = Baker(boto3.client("ec2", region_name=region or None), subnet=subnet, commit=commit)
+    baker = Baker(
+        boto3.client("ec2", region_name=region or None),
+        boto3.client("autoscaling", region_name=region or None),
+        group=group,
+        subnet=subnet,
+        commit=commit,
+    )
     try:
         baker.bake(template)
     except Exception:

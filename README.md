@@ -33,18 +33,18 @@ sequenceDiagram
     participant Team as Team (browser)
     participant Site as Website
     participant Worker as A worker
-    participant Box as Sandbox container
+    participant Sandbox as Sandbox container
 
     Team->>Site: upload bot.zip
     Worker->>Site: claim the build
-    Worker->>Box: run commands.json "build" once<br/>(only this bot, no network)
-    Box-->>Worker: built bot + build log
+    Worker->>Sandbox: run commands.json "build" once<br/>(only this bot, no network)
+    Sandbox-->>Worker: built bot + build log
     Worker->>Site: upload them
     Note over Site: bot is "built" and becomes current
     Team->>Site: challenge another team
     Worker->>Site: claim the game
-    Worker->>Box: engine + both built bots<br/>(the game's own cores, no network)
-    Box-->>Worker: scores, logs, per-bot stats
+    Worker->>Sandbox: engine + both built bots<br/>(the game's own cores, no network)
+    Sandbox-->>Worker: scores, logs, per-bot stats
     Worker->>Site: report the result
     Note over Site: ELO updated
     Team->>Site: read the result and logs

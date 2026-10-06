@@ -100,14 +100,16 @@ class FakeEc2:
     def terminate_instances(self, InstanceIds: list[str]) -> None:
         self.terminated += InstanceIds
 
-    def create_launch_template_version(self, **kwargs: Any) -> None:
+    def create_launch_template_version(self, **kwargs: Any) -> dict[str, Any]:
+        number = max(v["VersionNumber"] for v in self.versions) + 1
         self.versions.append(
             {
-                "VersionNumber": len(self.versions) + 1,
+                "VersionNumber": number,
                 "VersionDescription": kwargs["VersionDescription"],
                 "LaunchTemplateData": kwargs["LaunchTemplateData"],
             }
         )
+        return {"LaunchTemplateVersion": {"VersionNumber": number}}
 
     def delete_launch_template_versions(self, Versions: list[str], **_: Any) -> None:
         self.versions = [v for v in self.versions if str(v["VersionNumber"]) not in Versions]
@@ -127,15 +129,38 @@ class FakeEc2:
         self.deleted_snapshots.append(SnapshotId)
 
 
+class FakeAutoScaling:
+    """The fleet's group, as CloudFormation created it (version 1 of the template)."""
+
+    def __init__(self) -> None:
+        self.spec = {"LaunchTemplateId": "lt-1", "LaunchTemplateName": "pb-worker", "Version": "1"}
+        self.updates: list[dict[str, Any]] = []
+
+    def describe_auto_scaling_groups(self, **_: Any) -> dict[str, Any]:
+        policy = {
+            "LaunchTemplate": {"LaunchTemplateSpecification": dict(self.spec), "Overrides": []},
+            "InstancesDistribution": {"SpotAllocationStrategy": "price-capacity-optimized"},
+        }
+        return {"AutoScalingGroups": [{"MixedInstancesPolicy": policy}]}
+
+    def update_auto_scaling_group(self, **kwargs: Any) -> None:
+        self.updates.append(kwargs)
+        self.spec = kwargs["MixedInstancesPolicy"]["LaunchTemplate"]["LaunchTemplateSpecification"]
+
+
+def baker(ec2: FakeEc2, autoscaling: FakeAutoScaling, commit: str) -> bake.Baker:
+    return bake.Baker(ec2, autoscaling, group="pb-workers", subnet="subnet-1", commit=commit)
+
+
 @pytest.fixture(autouse=True)
 def fast_polling(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(bake, "POLL_SECONDS", 0)
 
 
 def test_bake_adds_a_template_version_and_cleans_up() -> None:
-    ec2 = FakeEc2()
+    ec2, autoscaling = FakeEc2(), FakeAutoScaling()
     template = "pb-worker"
-    assert bake.Baker(ec2, subnet="subnet-1", commit="a" * 40).bake(template) == "ami-baked-1"
+    assert baker(ec2, autoscaling, "a" * 40).bake(template) == "ami-baked-1"
     launch = ec2.launched[0]
     # A small throwaway machine from the CloudFormation version, told to bake and stop.
     assert launch["InstanceType"] == "m8g.large" and launch["SubnetId"] == "subnet-1"
@@ -146,12 +171,21 @@ def test_bake_adds_a_template_version_and_cleans_up() -> None:
     assert ec2.terminated == ["i-1"]
     assert ec2.versions[-1]["LaunchTemplateData"] == {"ImageId": "ami-baked-1"}
 
-    # The same commit again: nothing to do.
-    assert bake.Baker(ec2, subnet="subnet-1", commit="a" * 40).bake(template) is None
+    # The fleet now launches the baked version, with the rest of its policy kept.
+    assert autoscaling.spec == {"LaunchTemplateId": "lt-1", "Version": "2"}
+    policy = autoscaling.updates[0]["MixedInstancesPolicy"]
+    assert policy["InstancesDistribution"]["SpotAllocationStrategy"] == "price-capacity-optimized"
+
+    # The same commit again: nothing to bake, but a stack update may have reset
+    # the group to CloudFormation's version, so it is pointed back.
+    autoscaling.spec = {"LaunchTemplateId": "lt-1", "Version": "1"}
+    assert baker(ec2, autoscaling, "a" * 40).bake(template) is None
+    assert autoscaling.spec["Version"] == "2"
     # A new commit replaces the old image, still baking from version 1.
-    assert bake.Baker(ec2, subnet="subnet-1", commit="b" * 40).bake(template) == "ami-baked-2"
+    assert baker(ec2, autoscaling, "b" * 40).bake(template) == "ami-baked-2"
     assert ec2.launched[1]["LaunchTemplate"]["Version"] == "1"
     assert [v["VersionNumber"] for v in ec2.versions] == [1, 3]
+    assert autoscaling.spec["Version"] == "3"
     assert ec2.deregistered == ["ami-baked-1"]
     assert ec2.deleted_snapshots == ["snap-ami-baked-1"]
 
@@ -161,7 +195,7 @@ def test_failed_bake_reports_the_console_and_cleans_up(monkeypatch: pytest.Monke
     ec2 = FakeEc2()
     ec2.state = "running"
     with pytest.raises(bake.BakeFailed, match="apt failed"):
-        bake.Baker(ec2, subnet="subnet-1", commit="a" * 40).bake("pb-worker")
+        baker(ec2, FakeAutoScaling(), "a" * 40).bake("pb-worker")
     assert ec2.terminated == ["i-1"] and len(ec2.versions) == 1
 
 

@@ -225,7 +225,7 @@ Resources:
                 Action: [autoscaling:DescribeAutoScalingGroups, autoscaling:DescribeScalingActivities]
                 Resource: "*"
               - Effect: Allow
-                Action: autoscaling:SetDesiredCapacity
+                Action: [autoscaling:SetDesiredCapacity, autoscaling:UpdateAutoScalingGroup]
                 Resource: !Sub "arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${AWS::StackName}-*"
               # Nightly archive (scrimmage archive).
               - Effect: Allow
@@ -450,8 +450,9 @@ Resources:
         LaunchTemplate:
           LaunchTemplateSpecification:
             LaunchTemplateId: !Ref WorkerLaunchTemplate
-            # The newest version: the pre-baked image, once one exists.
-            Version: $Latest
+            # scrimmage bake-images later points the group at the version with
+            # the pre-built image (CloudFormation doesn't accept $Latest here).
+            Version: !GetAtt WorkerLaunchTemplate.LatestVersionNumber
           Overrides:
             - InstanceRequirements:
                 # Graviton4 only, like the main server: every match gets the

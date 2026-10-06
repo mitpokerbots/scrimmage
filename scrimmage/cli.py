@@ -183,7 +183,7 @@ def _bake_images(_args: argparse.Namespace) -> None:
     from scrimmage import bake  # noqa: PLC0415
 
     config = load_config()
-    sys.exit(bake.main(config.commit, config.aws_region))
+    sys.exit(bake.main(config.commit, config.aws_region, config.fleet_group))
 
 
 def _export_bots(args: argparse.Namespace) -> None:
