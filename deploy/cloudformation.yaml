@@ -14,7 +14,7 @@ Metadata:
       - Label: { default: Size and cost }
         Parameters: [InstanceType, FleetMaxVcpus, WorkerPricing, DataVolumeSize, AlertEmail, MonthlyBudgetUSD]
       - Label: { default: Advanced }
-        Parameters: [RepositoryUrl, Branch]
+        Parameters: [RepositoryUrl, Branch, WorkerImage]
 
 Parameters:
   DomainName:
@@ -69,6 +69,12 @@ Parameters:
   Branch:
     Type: String
     Default: master
+  WorkerImage:
+    # Auto Scaling needs an image id, so CloudFormation looks up the latest
+    # Ubuntu 24.04 (arm64) image when the stack is created or updated.
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id
+    Description: Base image for worker machines. Leave the default.
 
 Conditions:
   HasAlertEmail: !Not [!Equals [!Ref AlertEmail, ""]]
@@ -394,7 +400,7 @@ Resources:
         - ResourceType: launch-template
           Tags: [{ Key: scrimmage-stack, Value: !Ref AWS::StackName }]
       LaunchTemplateData:
-        ImageId: resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id
+        ImageId: !Ref WorkerImage
         IamInstanceProfile: { Arn: !GetAtt WorkerProfile.Arn }
         SecurityGroupIds: [!Ref WorkerSecurityGroup]
         MetadataOptions: { HttpTokens: required, HttpPutResponseHopLimit: 1 }
