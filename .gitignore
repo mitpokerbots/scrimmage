@@ -103,3 +103,13 @@ start_worker.sh
 start_server.sh
 
 .idea/
+
+# Local scrimmage data (AUTH_MODE=dev runs)
+/data/
+
+# Never commit credentials or the organizers' private operations guide.
+*.pem
+*.key
+.env.*
+OPERATIONS.md
+/internal/

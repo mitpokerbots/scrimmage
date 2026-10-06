@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check scrimmage tests game/run_match.py
+      - run: uv run mypy
+      - run: uv run pytest
+
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Lint CloudFormation
+        run: uvx cfn-lint deploy/cloudformation.yaml
+      - name: Lint shell scripts
+        run: uvx --from shellcheck-py shellcheck deploy/*.sh deploy/scrimmage-cli
+      - name: Apache + Shibboleth + app in Ubuntu 24.04
+        run: docker run --rm -v "$PWD:/src:ro" ubuntu:24.04 bash /src/deploy/test-deploy.sh

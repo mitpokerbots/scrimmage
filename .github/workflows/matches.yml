@@ -1,0 +1,24 @@
+# Real matches in the game image, including hostile bots. The image is large,
+# so this only runs when the sandbox or engine changes, or on demand.
+name: Matches
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: [game/**, scrimmage/worker/**, tests/test_docker.py, tests/fixtures/**]
+  pull_request:
+    paths: [game/**, scrimmage/worker/**, tests/test_docker.py, tests/fixtures/**]
+
+jobs:
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space for the game image
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: docker build -t scrimmage-game:latest game/
+      - run: uv run pytest -m docker -v

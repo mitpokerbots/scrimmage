@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Sponsor Access</h1>
+  <div class="ui message">
+    Welcome to the scrimmage server sponsor view! Select a team below to view more information.
+    If you have feature requests, feel free to send them to <a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a>.
+  </div>
+
+  <h2>Tournaments</h2>
+  <div class="ui list">
+    {% for t in tournaments %}
+      <a class="item" href="{{ url_for('sponsor.tournament', tournament_id=t.id) }}">{{ t.title }}</a>
+    {% else %}
+      <div class="item">No tournaments yet.</div>
+    {% endfor %}
+  </div>
+
+  <h2 class="ui header">Team Standings
+    <div class="sub header">Click on a team to see more.</div>
+  </h2>
+  <table class="ui selectable celled striped table">
+    <thead><tr><th>Name</th><th>ELO</th><th>Wins</th><th>Losses</th><th>Total Members</th></tr></thead>
+    <tbody>
+      {% for t in teams %}
+        <tr>
+          <td><a href="{{ url_for('sponsor.team', team_id=t.id) }}">{{ t.name }}</a></td>
+          <td class="center"><div class="ui mini statistic"><div class="value">{{ t.elo|int }}</div></div></td>
+          <td class="center"><div class="ui mini green statistic"><div class="value">{{ t.wins }}</div></div></td>
+          <td class="center"><div class="ui mini red statistic"><div class="value">{{ t.losses }}</div></div></td>
+          <td class="center"><div class="ui mini statistic"><div class="value">{{ t.size }}</div></div></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

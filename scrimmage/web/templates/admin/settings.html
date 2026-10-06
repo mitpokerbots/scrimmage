@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block content %}
+  {% set s = settings() %}
+  <h1>Admin: Settings</h1>
+  <p>Changes apply immediately; game parameters apply to games that start afterwards.</p>
+  <table class="ui celled striped table">
+    <thead>
+      <tr><th class="four wide">key</th><th class="six wide">description</th><th class="two wide">value</th><th class="four wide">change value</th></tr>
+    </thead>
+    <tbody>
+      {% for setting in all_settings %}
+        <tr>
+          <td><code>{{ setting.key }}</code></td>
+          <td>{{ setting.description }}</td>
+          <td>{% if setting.secret %}{{ '(set)' if s.display(setting.key) else '(not set)' }}{% else %}{{ s.display(setting.key) }}{% endif %}</td>
+          <td>
+            <form class="ui form" method="POST" action="{{ url_for('admin.save_setting') }}">
+              {{ csrf() }}
+              <input type="hidden" name="key" value="{{ setting.key }}">
+              <div class="ui fluid action input">
+                <input type="{{ 'password' if setting.secret else 'text' }}" name="value" placeholder="new value" autocomplete="off">
+                <button class="ui submit button">Change</button>
+              </div>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

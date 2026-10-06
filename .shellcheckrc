@@ -1,0 +1,2 @@
+# Scripts source config files that only exist on the server.
+disable=SC1091

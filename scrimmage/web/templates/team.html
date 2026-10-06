@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button, statistic %}
+{% block content %}
+  {% set s = settings() %}
+  {% set me = g.team %}
+  <h1>{{ me.name }}</h1>
+  <div class="ui stackable grid container">
+    <div class="eight wide column">
+      <h2>Manage</h2>
+      <h3>Status</h3>
+      <p>
+        {% if me.current_bot_id and not me.is_disabled %}
+          Your team is ready to play!
+        {% else %}
+          Your team is <strong>not</strong> ready to play. Please upload a bot; it becomes your current bot once it builds.
+        {% endif %}
+      </p>
+      <h3>Statistics</h3>
+      <div class="ui four small statistics">
+        {{ statistic(me.elo|int, 'ELO') }}
+        {{ statistic(me.wins, 'Wins', 'green') }}
+        {{ statistic(me.losses, 'Losses', 'red') }}
+        {{ statistic(me.wins + me.losses + me.ties, 'Total Games') }}
+      </div>
+
+      <h3>Teammates</h3>
+      <div class="ui segments">
+        {% for m in members %}
+          <div class="ui segment">
+            <h3 class="ui header"><div class="content">{{ m.kerberos }}
+              {% if m.display_name %}<div class="sub header">{{ m.display_name }}</div>{% endif %}</div></h3>
+          </div>
+        {% endfor %}
+      </div>
+
+      <h3>Incoming Teammate Requests</h3>
+      <div class="ui segments">
+        {% if members|length < s.number('maximum_team_size') %}
+          {% for u in join_requests %}
+            <div class="ui segment">
+              <h3 class="ui header">
+                <div class="right-floated">
+                  {{ post_button(url_for('main.answer_join', user_id=u.id), 'Accept', 'mini positive', None, {'action': 'accept'}) }}
+                  {{ post_button(url_for('main.answer_join', user_id=u.id), 'Reject', 'mini negative', None, {'action': 'reject'}) }}
+                </div>
+                <div class="content">{{ u.kerberos }}</div>
+              </h3>
+            </div>
+          {% else %}
+            <div class="ui segment">If someone requests to join your team, they will appear here.</div>
+          {% endfor %}
+        {% else %}
+          <div class="ui segment">Your team is full - no one else can join.</div>
+        {% endif %}
+      </div>
+
+      <h3>Leave team</h3>
+      <div class="ui message">
+        Use the button below to leave your team. If you are the only person on the team, your team will be disabled.
+      </div>
+      {{ post_button(url_for('main.leave_team'), 'Leave team', 'mini basic negative', 'Are you sure you want to leave? This action cannot be undone.') }}
+    </div>
+
+    <div class="eight wide column">
+      <h2>Bots</h2>
+      <p>Your current bot is highlighted below. A new upload builds once, then becomes your current bot.</p>
+      <table class="ui compact celled striped table">
+        <thead>
+          <tr><th>Name</th><th>Wins</th><th>Losses</th><th>Created</th><th>Build</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          {% for bot in bots %}
+            {% set current = bot.id == me.current_bot_id %}
+            <tr{% if current %} class="positive"{% elif bot.build_status == 'failed' %} class="negative"{% endif %}>
+              <td><a href="{{ url_for('main.download_bot', bot_id=bot.id) }}">{{ bot.name }}</a></td>
+              <td>{{ bot.wins }}</td>
+              <td>{{ bot.losses }}</td>
+              <td>{{ bot.created_at|time }}</td>
+              <td>
+                {% if bot.build_status == 'ready' %}Built
+                {% elif bot.build_status == 'failed' %}<span title="{{ bot.build_error }}">Failed</span>
+                {% else %}Building…{% endif %}
+                {% if bot.build_status in ('ready', 'failed') %}(<a href="{{ url_for('main.build_log', bot_id=bot.id) }}">log</a>){% endif %}
+              </td>
+              <td class="center">
+                <form class="inline" action="{{ url_for('main.set_current_bot', bot_id=bot.id) }}" method="POST">
+                  {{ csrf() }}
+                  <button class="ui positive icon button {{ 'disabled' if current or bot.build_status != 'ready' }}" title="Set bot"><i class="mouse pointer icon"></i></button>
+                </form>
+                <form class="inline" action="{{ url_for('main.delete_bot', bot_id=bot.id) }}" method="POST"
+                  data-confirm="Are you sure you want to delete? This action cannot be undone.">
+                  {{ csrf() }}
+                  <button class="ui negative icon button {{ 'disabled' if current }}" title="Delete bot"><i class="times icon"></i></button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6">You don't have any bots! Upload one below.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="ui top attached segment">
+        <h3 class="ui dividing header">Upload a bot</h3>
+        <form class="ui form" method="POST" action="{{ url_for('main.upload_bot') }}" enctype="multipart/form-data" data-upload>
+          {{ csrf() }}
+          <div class="field">
+            <label>Bot name</label>
+            <input type="text" placeholder="i.e. Good bot 2" name="name" maxlength="60">
+          </div>
+          <div class="field">
+            <label>File select</label>
+            <input type="file" name="file" accept=".zip,application/zip" required>
+          </div>
+          <button type="submit" class="ui primary button">Upload</button>
+        </form>
+      </div>
+      <div class="ui bottom attached message">
+        <p>Upload your bot as a zip above (max {{ s.number('max_bot_upload_mb') }} MB compressed, 1 GB uncompressed).</p>
+        <p>Please zip the entire parent folder containing your bot files, including its <code>commands.json</code>.
+          Its <code>build</code> command runs once after the upload (no network, {{ s.number('bot_build_timeout_seconds') // 60 }} minute limit);
+          <code>run</code> starts your bot for each game.</p>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "_macros.html" import post_button, friendly_status, elo %}
+{% block content %}
+  <h1>Admin: Game {{ game.id }} <span class="ui label">{{ friendly_status(game) }}</span></h1>
+  <p>{{ game.tournament_title or 'Scrimmage' }} · created {{ game.created_at|time }}
+    {% if game.started_at %} · started {{ game.started_at|time }}{% endif %}
+    {% if game.finished_at %} · finished {{ game.finished_at|time }}{% endif %}</p>
+
+  <div class="ui stackable grid container">
+    <div class="eight wide column">
+      <h2>Result</h2>
+      <table class="ui celled table">
+        <thead><tr><th></th><th>Team</th><th>Bot</th><th>Score</th><th>ELO</th></tr></thead>
+        <tbody>
+          {% for side, label in (('a', 'Challenger'), ('b', 'Opponent')) %}
+            <tr{% if game.winner == side %} class="positive"{% endif %}>
+              <td>{{ label }}</td>
+              <td>{{ game['team_' + side + '_name'] }}</td>
+              <td><a href="{{ url_for('main.download_bot', bot_id=game['bot_' + side + '_id']) }}">{{ game['bot_' + side + '_name'] }}</a>
+                {% if builds[side] %}(<a href="{{ url_for('main.build_log', bot_id=game['bot_' + side + '_id']) }}">build log</a>){% endif %}</td>
+              <td>{{ game['score_' + side] if game['score_' + side] is not none }}</td>
+              <td>{% if game['elo_' + side + '_after'] is not none %}{{ elo(game['elo_' + side + '_before']) }} → {{ elo(game['elo_' + side + '_after']) }}{% else %}N/A{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p>Logs:
+        {% for kind in logs %}<a href="{{ url_for('main.game_log', game_id=game.id, kind=kind) }}">{{ {'game': 'game', 'engine': 'engine', 'a': 'challenger', 'b': 'opponent'}[kind] }}</a>{{ ' · ' if not loop.last }}{% else %}not available{% endfor %}</p>
+      {% if game.error %}<div class="ui negative message"><pre class="error">{{ game.error }}</pre></div>{% endif %}
+      {% if game.status == 'error' %}{{ post_button(url_for('admin.retry_game', game_id=game.id), 'Retry', 'basic') }}{% endif %}
+    </div>
+    <div class="eight wide column">
+      <h2>Where it ran</h2>
+      <table class="ui definition table">
+        <tbody>
+          <tr><td>Hardware</td><td>{{ game.cores }} core{{ 's' if game.cores != 1 }}, {{ game.bot_memory_mb }} MB per bot ({{ cpu }})</td></tr>
+          <tr><td>Worker</td><td>{{ game.worker or '' }}{% if stats.machine %} ({{ stats.machine }}){% endif %}</td></tr>
+          {% if stats.cpus %}<tr><td>CPUs</td><td>{{ stats.cpus|join(', ') }}</td></tr>{% endif %}
+          {% if stats.seconds %}<tr><td>Took</td><td>{{ stats.seconds|int|duration }}</td></tr>{% endif %}
+          {% if stats.oom_killed %}<tr class="negative"><td>Container</td><td>ran out of memory</td></tr>{% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if stats.bots %}
+    <h2>Bots</h2>
+    <table class="ui celled table">
+      <thead><tr><th></th><th>Connected</th><th>Thinking time used</th><th>Ran out of time</th><th>Bankroll</th><th>Peak memory</th></tr></thead>
+      <tbody>
+        {% for side, b in bot_stats %}
+          <tr>
+            <td>{{ 'Challenger' if side == 'a' else 'Opponent' }}</td>
+            <td>{{ 'yes' if b.connected else 'no' }}</td>
+            <td>{% if b.clock_used is defined %}{{ '%.2f'|format(b.clock_used) }} s{% endif %}</td>
+            <td>{{ 'yes' if b.clock_out else 'no' }}</td>
+            <td>{{ b.bankroll if b.bankroll is defined }}</td>
+            <td>{% if b.peak_memory_mb is defined %}{{ b.peak_memory_mb }} MB{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if stats.events %}
+      <h3>Events</h3>
+      <div class="ui list">{% for e in stats.events %}<div class="item">{{ e }}</div>{% endfor %}</div>
+    {% endif %}
+  {% endif %}
+{% endblock %}

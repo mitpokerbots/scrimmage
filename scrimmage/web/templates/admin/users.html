@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block content %}
+  <h1>Admin: Users list</h1>
+  {% macro team_select(selected) -%}
+    <select class="ui dropdown" name="team_id">
+      <option value="">(no team)</option>
+      {% for t in teams %}<option value="{{ t.id }}" {{ 'selected' if t.id == selected }}>{{ t.name }}{{ ' (disabled)' if t.is_disabled }}</option>{% endfor %}
+    </select>
+  {%- endmacro %}
+  <table class="ui striped celled table">
+    <thead>
+      <tr><th>#</th><th>kerberos</th><th>name</th><th>last login</th><th>team</th><th>change team</th><th>delete</th></tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+        <tr>
+          <td>{{ u.id }}</td>
+          <td>{{ u.kerberos }}{% if u.is_admin %} <span class="ui mini blue label">admin</span>{% endif %}</td>
+          <td>{{ u.display_name or '' }}</td>
+          <td>{{ u.last_login_at|ago if u.last_login_at else 'never' }}</td>
+          <td>{{ u.team_name or '' }}</td>
+          <td>
+            <form class="ui form" action="{{ url_for('admin.update_user', user_id=u.id) }}" method="POST">
+              {{ csrf() }}
+              <div class="inline fields">
+                <div class="field">{{ team_select(u.team_id) }}</div>
+                <div class="field">
+                  <div class="ui checkbox">
+                    <input type="checkbox" name="is_admin" value="1" id="admin-{{ u.id }}" {{ 'checked' if u.is_admin }}>
+                    <label for="admin-{{ u.id }}">admin</label>
+                  </div>
+                </div>
+                <button class="ui button">Change</button>
+              </div>
+            </form>
+          </td>
+          <td class="center">
+            {% if u.id != g.real_user.id %}
+              <form class="inline" action="{{ url_for('admin.delete_user', user_id=u.id) }}" method="POST" data-confirm="Delete {{ u.kerberos }}?">
+                {{ csrf() }}
+                <button class="ui basic negative icon button" title="Delete"><i class="times icon"></i></button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7">No users yet, create one below</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="ui segment">
+    <h2 class="ui header">Create a user</h2>
+    <p>Users are created on their first login; create one here to put them on a team ahead of time.</p>
+    <form class="ui form" action="{{ url_for('admin.create_user') }}" method="POST">
+      {{ csrf() }}
+      <div class="three fields">
+        <div class="field">
+          <label>Kerberos</label>
+          <input type="text" placeholder="i.e. jserrino" name="kerberos" required>
+        </div>
+        <div class="field">
+          <label>Team</label>
+          {{ team_select(None) }}
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="ui positive button">Create</button>
+        </div>
+      </div>
+    </form>
+  </div>
+{% endblock %}

@@ -1,0 +1,82 @@
+[project]
+name = "scrimmage"
+version = "3.0.0"
+description = "MIT Pokerbots scrimmage server"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+dependencies = [
+    "flask>=3.1",
+    "gunicorn>=23.0",
+    # Time zone data for zoneinfo even on hosts without the system package.
+    "tzdata",
+    # Worker: runs sandboxed matches through the local Docker daemon, and
+    # talks to the server's worker API.
+    "docker>=7.1",
+    "requests>=2.32",
+    # AWS: the worker token (Secrets Manager) and the fleet (Auto Scaling).
+    "boto3>=1.35",
+]
+
+[project.scripts]
+scrimmage = "scrimmage.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["scrimmage*"]
+
+[tool.setuptools.package-data]
+scrimmage = ["web/templates/**/*", "web/static/*", "schema/*.sql"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["game/engine.py", "game/config_template.py", "tests/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PL"]
+ignore = [
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917", "PLR2004",
+    "S101",    # asserts are fine in tests
+    "S603", "S607",  # subprocess with trusted, fixed argv
+    "S608",    # SQL built only from fixed fragments; values are always bound
+    "RUF012",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S107", "S108", "PLC0415"]
+# The engine passes check= itself and the engine log stays open for the whole match.
+"game/run_match.py" = ["S108", "PLW0603", "PLW1510", "SIM115"]
+# Paths inside the match container, not on the host.
+"scrimmage/worker/sandbox.py" = ["S108"]
+# Markup built only from escape()d text and formatted numbers.
+"scrimmage/web/charts.py" = ["S704"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unreachable = true
+files = ["scrimmage", "game/run_match.py"]
+
+[[tool.mypy.overrides]]
+module = ["docker", "docker.*", "boto3", "boto3.*"]
+ignore_missing_imports = true
+
+# The season's engine is vendored unmodified; treat it as untyped.
+[[tool.mypy.overrides]]
+module = ["engine"]
+follow_imports = "skip"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["docker: needs a Docker daemon and the scrimmage-game image"]
+addopts = "-m 'not docker'"

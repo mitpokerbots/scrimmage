@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button %}
+{% block content %}
+  <h1>Admin: Teams list</h1>
+  <table class="ui celled striped table">
+    <thead>
+      <tr><th>#</th><th>name</th><th>members</th><th>current bot</th><th>wins</th><th>losses</th><th>elo</th><th>modify</th><th>upload bot</th><th>delete</th></tr>
+    </thead>
+    <tbody>
+      {% for t in teams %}
+        <tr{% if t.is_disabled %} class="disabled"{% elif t.is_reference %} class="warning"{% endif %}>
+          <td>{{ t.id }}</td>
+          <td>{{ t.name }}</td>
+          <td>{{ t.members or 'No members.' }}</td>
+          <td>{% if t.current_bot_id %}<a href="{{ url_for('main.download_bot', bot_id=t.current_bot_id) }}">{{ t.bot_name }}</a>{% else %}None{% endif %}</td>
+          <td class="center"><div class="ui mini green statistic"><div class="value">{{ t.wins }}</div></div></td>
+          <td class="center"><div class="ui mini red statistic"><div class="value">{{ t.losses }}</div></div></td>
+          <td class="center"><div class="ui mini statistic"><div class="value">{{ t.elo|int }}</div></div></td>
+          <td>
+            <form class="ui form" action="{{ url_for('admin.update_team', team_id=t.id) }}" method="POST">
+              {{ csrf() }}
+              <div class="three fields">
+                <div class="field">
+                  <label>Name</label>
+                  <input name="name" value="{{ t.name }}" maxlength="40">
+                </div>
+                <div class="field">
+                  <label>Enabled?</label>
+                  <select name="is_disabled" class="ui fluid dropdown">
+                    <option value="" {{ 'selected' if not t.is_disabled }}>Enabled</option>
+                    <option value="1" {{ 'selected' if t.is_disabled }}>Disabled</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Auto-accepts?</label>
+                  <select name="is_reference" class="ui fluid dropdown">
+                    <option value="" {{ 'selected' if not t.is_reference }}>Doesn't auto-accept</option>
+                    <option value="1" {{ 'selected' if t.is_reference }}>Auto-accept (reference)</option>
+                  </select>
+                </div>
+              </div>
+              <button class="ui mini positive basic button">Modify</button>
+            </form>
+          </td>
+          <td>
+            <form class="ui form" action="{{ url_for('admin.upload_bot', team_id=t.id) }}" method="POST" enctype="multipart/form-data" data-upload>
+              {{ csrf() }}
+              <div class="field"><input type="file" name="file" accept=".zip" required></div>
+              <button class="ui mini basic button">Upload</button>
+            </form>
+          </td>
+          <td class="center">
+            {% if t.games == 0 %}
+              <form class="inline" action="{{ url_for('admin.delete_team', team_id=t.id) }}" method="POST" data-confirm="Delete {{ t.name }}?">
+                {{ csrf() }}
+                <button class="ui basic negative icon button" title="Delete"><i class="times icon"></i></button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="10">No teams yet, create one below</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="ui segment">
+    <h2 class="ui header">Create a team</h2>
+    <p>Reference teams have no members and accept every challenge automatically. Upload their bot in the table above.</p>
+    <form class="ui form" action="{{ url_for('admin.create_team') }}" method="POST">
+      {{ csrf() }}
+      <div class="inline fields">
+        <div class="field"><input type="text" placeholder="Team name" name="name" required maxlength="40"></div>
+        <div class="field">
+          <div class="ui checkbox">
+            <input type="checkbox" name="is_reference" value="1" id="new_reference" checked>
+            <label for="new_reference">Reference team</label>
+          </div>
+        </div>
+        <button class="ui positive button">Create</button>
+      </div>
+    </form>
+  </div>
+  <div class="ui negative segment">
+    <h2 class="ui header">New season</h2>
+    <p>Reset every team's ELO to 1500 and clear win/loss records. Games and tournaments are kept.</p>
+    <form class="ui form" action="{{ url_for('admin.reset_ratings') }}" method="POST">
+      {{ csrf() }}
+      <div class="ui action input">
+        <input name="confirm" placeholder="Type RESET" required>
+        <button class="ui negative button">Reset ratings</button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

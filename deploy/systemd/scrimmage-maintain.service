@@ -1,0 +1,19 @@
+[Unit]
+Description=Scrimmage housekeeping: requeue lost games, rate tournaments, expire logs, size the fleet
+
+[Service]
+Type=oneshot
+User=scrimmage
+Group=scrimmage
+EnvironmentFile=/etc/scrimmage/env
+EnvironmentFile=-/etc/scrimmage/env.local
+WorkingDirectory=/opt/scrimmage
+UMask=0077
+ExecStart=/opt/scrimmage/.venv/bin/scrimmage maintain
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/srv/scrimmage
+PrivateTmp=yes
+PrivateDevices=yes

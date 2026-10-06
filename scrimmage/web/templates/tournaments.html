@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Tournaments</h1>
+  {% for t in tournaments %}
+    {% with link = url_for('main.tournament_detail', tournament_id=t.id) %}{% include "_tournament.html" %}{% endwith %}
+  {% else %}
+    <p>There are no tournaments to show.</p>
+  {% endfor %}
+{% endblock %}

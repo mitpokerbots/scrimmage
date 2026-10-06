@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block content %}
+  <h1>Admin: Tournament Management</h1>
+
+  <h2 class="ui dividing header">Control tournaments</h2>
+  {% for t in tournaments %}
+    {% with link = url_for('main.tournament_detail', tournament_id=t.id) %}{% include "_tournament.html" %}{% endwith %}
+  {% else %}
+    <p>There are no tournaments to show.</p>
+  {% endfor %}
+  <p>Open a tournament for its standings, controls (re-queue failed games, cancel, privacy, delete) and exports.</p>
+
+  <h2 class="ui dividing header">Spawn</h2>
+  <div class="ui top attached segment">
+    <h3 class="ui dividing header">Spawn a tournament</h3>
+    <form class="ui form" method="POST" action="{{ url_for('admin.create_tournament') }}">
+      {{ csrf() }}
+      <div class="field">
+        <label>Tournament name</label>
+        <input type="text" placeholder="Week 1 cool boy tournament" name="title" maxlength="100">
+      </div>
+      <div class="field">
+        <label>Games per pair</label>
+        <input type="number" min="1" value="10" name="games_per_pair" required>
+      </div>
+      <div class="inline field">
+        <div class="ui checkbox">
+          <input type="checkbox" name="is_private" value="1" id="is_private">
+          <label for="is_private">Private tournament? (Only visible to admins and sponsors)</label>
+        </div>
+      </div>
+      <details>
+        <summary>Teams ({{ eligible|length }} with a current bot, all selected)</summary>
+        <div class="columns">
+          {% for t in eligible %}
+            <div class="ui checkbox">
+              <input type="checkbox" name="team_ids" value="{{ t.id }}" id="team-{{ t.id }}" checked>
+              <label for="team-{{ t.id }}">{{ t.name }}</label>
+            </div><br>
+          {% endfor %}
+        </div>
+      </details>
+      <br>
+      <button type="submit" class="ui primary button">Spawn tournament</button>
+    </form>
+  </div>
+  <div class="ui bottom attached info message">
+    <p>We run games for every pair of bots, N times, with each team's <em>current</em> bot (snapshotted now) and alternating seats.
+      Scrimmages keep priority in the queue.</p>
+    <p>There are {{ eligible|length }} eligible teams, so {{ (eligible|length * (eligible|length - 1) / 2)|int }} pairs.</p>
+    <p>We recommend at least 10 games for every pair of teams.</p>
+  </div>
+
+  <h2 class="ui dividing header" id="cost">Cost estimate</h2>
+  <form class="ui form" method="GET">
+    <div class="five fields">
+      <div class="field"><label>Teams</label><input name="teams" type="number" min="2" value="{{ estimate.teams }}"></div>
+      <div class="field"><label>Games per pair</label><input name="games_per_pair" type="number" min="1" value="{{ estimate.games_per_pair }}"></div>
+      <div class="field"><label>Minutes per game</label><input name="minutes" type="number" min="0.1" step="0.1" value="{{ estimate.minutes }}"></div>
+      <div class="field"><label>Games at once</label><input name="at_once" type="number" min="1" value="{{ estimate.at_once }}"></div>
+      <div class="field"><label>&nbsp;</label><button class="ui button">Estimate</button></div>
+    </div>
+  </form>
+  {% set first = estimates[0][2] %}
+  <p>{{ estimate.teams }} teams × {{ estimate.games_per_pair }} games per pair = <strong>{{ '{:,}'.format(first.games) }} games</strong>,
+    {{ '{:,.0f}'.format(first.game_hours) }} game-hours, about <strong>{{ '%.1f'|format(first.wall_hours) }} hours</strong> at {{ estimate.at_once }} games at once.
+    Minutes per game defaults to the average of recent games (or both bots using their whole time bank, before there are any).</p>
+  <table class="ui celled striped table">
+    <thead><tr><th>Cores per game</th><th>Memory per bot</th><th>Spot</th><th>On demand</th><th>Per game-hour (on demand)</th></tr></thead>
+    <tbody>
+      {% for label, choice, e in estimates %}
+        <tr>
+          <td>{{ label }}</td>
+          <td>{{ '%g'|format(choice.bot_memory_mb / 1024) }} GB</td>
+          <td>${{ '{:,.0f}'.format(e.spot_usd) }}</td>
+          <td>${{ '{:,.0f}'.format(e.on_demand_usd) }}</td>
+          <td>${{ '%.3f'|format(choice.usd_per_game_hour(spot=False)) }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p>Worker machines only, at AWS us-east-1 list prices; spot uses a typical discount, not a quote.
+    The main server ({{ main_server }}, about ${{ '%.0f'|format(main_server_monthly) }}/month) runs regardless.</p>
+{% endblock %}

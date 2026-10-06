@@ -1,0 +1,7 @@
+[Unit]
+Description=Activate TLS certificates that mod_md obtained or renewed
+
+[Service]
+Type=oneshot
+# mod_md stages new certificates; Apache only uses them after a reload.
+ExecStart=/bin/sh -c 'if [ -n "$(ls -A /srv/apache-md/staging 2>/dev/null)" ]; then systemctl reload apache2; fi'

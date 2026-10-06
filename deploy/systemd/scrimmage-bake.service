@@ -1,0 +1,19 @@
+[Unit]
+Description=Scrimmage: bake fleet worker machine images for the deployed commit
+After=network-online.target scrimmage-web.service
+
+[Service]
+Type=oneshot
+User=scrimmage
+Group=scrimmage
+EnvironmentFile=/etc/scrimmage/env
+EnvironmentFile=-/etc/scrimmage/env.local
+WorkingDirectory=/opt/scrimmage
+ExecStart=/opt/scrimmage/.venv/bin/scrimmage bake-images
+TimeoutStartSec=3h
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes

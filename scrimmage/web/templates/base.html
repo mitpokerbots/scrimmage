@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>{% block title %}Pokerbots Scrimmage{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/semantic.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='site.css') }}">
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  </head>
+
+  <body>
+    {% set endpoint = request.endpoint or '' %}
+    <div class="ui inverted menu">
+      <div class="ui container">
+        <a href="{{ url_for('main.index') }}" class="header item">
+          <img class="logo" src="{{ url_for('static', filename='img/logo_clear.png') }}" alt="">
+          Pokerbots Scrimmage
+        </a>
+        <a href="{{ url_for('main.index') }}" class="{{ 'active' if endpoint == 'main.index' }} item">Home</a>
+        {% if g.user %}
+          <a href="{{ url_for('main.announcements') }}" class="{{ 'active' if endpoint == 'main.announcements' }} item">Announcements</a>
+        {% endif %}
+        {% if g.team %}
+          <a href="{{ url_for('main.team') }}" class="{{ 'active' if endpoint == 'main.team' }} item">Manage Team</a>
+          <a href="{{ url_for('main.games') }}" class="{{ 'active' if endpoint == 'main.games' }} item">Your Games</a>
+        {% endif %}
+        {% if g.team or g.is_admin %}
+          <a href="{{ url_for('main.tournament_list') }}" class="{{ 'active' if endpoint.startswith('main.tournament') }} item">Tournaments</a>
+        {% endif %}
+        {% if g.team %}
+          <a href="{{ url_for('main.charts_page') }}" class="{{ 'active' if endpoint == 'main.charts_page' }} item">Charts</a>
+        {% endif %}
+        <a href="https://playground.pokerbots.org" class="item">Playground</a>
+        {% if g.is_admin %}
+          <a href="{{ url_for('admin.dashboard') }}" class="{{ 'active' if endpoint.startswith('admin.') }} item">Admin</a>
+          <a href="{{ url_for('sponsor.index') }}" class="{{ 'active' if endpoint.startswith('sponsor.') }} item">Sponsor</a>
+        {% endif %}
+        {% if g.user %}
+          <form method="post" action="{{ url_for('auth.logout') }}" class="right item">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button>Log out {{ g.user.kerberos }}{% if g.real_user and g.real_user.id != g.user.id %} ({{ g.real_user.kerberos }}){% endif %}</button>
+          </form>
+        {% else %}
+          <a href="{{ url_for('auth.login', next=request.path) }}" class="right item">Log in</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ui main container">
+      {% if g.user and g.real_user and g.user.id != g.real_user.id %}
+        <div class="ui warning message">
+          You are viewing the site as <strong>{{ g.user.kerberos }}</strong>.
+          <form method="post" action="{{ url_for('admin.stop_impersonating') }}" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="ui mini positive button">Cancel Impersonation</button>
+          </form>
+        </div>
+      {% endif %}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="ui {{ {'error': 'negative', 'success': 'positive'}.get(category, category) }} message">{{ message }}</div>
+        {% endfor %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </div>
+    <br>
+
+    <div class="ui inverted vertical footer segment">
+      <div class="ui center aligned container">
+        <img src="{{ url_for('static', filename='img/logo_clear.png') }}" class="ui centered mini image" alt="">
+        <div class="ui horizontal inverted small divided link list">
+          <a class="item" href="{{ url_for('main.index') }}">Home</a>
+          <a class="item" href="https://pokerbots.org">Pokerbots.org</a>
+          <a class="item" href="https://pkr.bot/resources">Class Resources</a>
+          <a class="item" href="https://pkr.bot/piazza">Piazza</a>
+          <a class="item" href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

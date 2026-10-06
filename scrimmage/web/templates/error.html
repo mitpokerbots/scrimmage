@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="ui negative message">
+    {% if error.code is defined %}
+      <div class="header">{{ error.code }} - {{ error.name }}</div>
+      <p>{{ error.description }}</p>
+    {% else %}
+      <div class="header">Something went wrong</div>
+      <p>{{ error }}</p>
+    {% endif %}
+  </div>
+  <p><a href="{{ url_for('main.index') }}">Back to the home page</a></p>
+{% endblock %}

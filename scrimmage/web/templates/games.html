@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_macros.html" import friendly_status, winner_name, elo, log_link, pager %}
+{% block content %}
+  <h1>Your Games</h1>
+  {{ pager(page, has_next, 'main.games') }}
+  <table class="ui striped celled table">
+    <thead>
+      <tr>
+        <th>Challenger</th><th>C. ELO</th><th>Opponent</th><th>O. ELO</th><th>Creation Time</th>
+        <th>Your bot</th><th>Status</th><th>C. Score</th><th>O. Score</th><th>Winner</th>
+        <th>Game Log</th><th>Player Log</th><th>Engine Log</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for game in games %}
+        {% set mine = 'a' if game.team_a_id == g.team.id else 'b' %}
+        <tr class="{% if game.status in ('queued', 'running') %}disabled{% elif game.status == 'error' %}warning{% elif game.winner == mine %}positive{% elif game.winner == 'tie' %}{% else %}negative{% endif %}">
+          <td>{{ game.team_a_name }}</td>
+          <td>{{ elo(game.elo_a_before) }}</td>
+          <td>{{ game.team_b_name }}</td>
+          <td>{{ elo(game.elo_b_before) }}</td>
+          <td>{{ game.created_at|time }}</td>
+          <td>{{ game.bot_a_name if mine == 'a' else game.bot_b_name }}</td>
+          <td>{{ friendly_status(game) }}</td>
+          <td>{{ game.score_a if game.score_a is not none }}</td>
+          <td>{{ game.score_b if game.score_b is not none }}</td>
+          <td>{{ winner_name(game) }}</td>
+          <td>{{ log_link(game, 'game') }}</td>
+          <td>{{ log_link(game, mine) }}</td>
+          <td>{{ log_link(game, 'engine') }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="13">Once you have played some games, they will show up here.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p>ELO numbers are pre-match elos. The engine log shows connection and timeout problems.</p>
+{% endblock %}

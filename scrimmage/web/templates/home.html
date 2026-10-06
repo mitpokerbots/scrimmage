@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button, announcements_list, recent_games %}
+{% block content %}
+  {% set s = settings() %}
+  {% set me = g.team %}
+  <h1>{{ me.name }} - Pokerbots Scrimmage</h1>
+  {% if me.is_disabled %}
+    <div class="ui warning message">
+      <div class="header">Team disabled.</div>
+      Your team is currently disabled, and cannot challenge or receive new challenges.
+    </div>
+  {% endif %}
+  {% if not s.flag('challenges_enabled') %}
+    <div class="ui info message">
+      <div class="header">Challenges disabled.</div>
+      Challenges are currently disabled.
+    </div>
+  {% elif s.flag('challenges_only_reference') %}
+    <div class="ui info message">
+      <div class="header">Reference challenges only.</div>
+      Challenges are disabled against all teams besides reference players.
+    </div>
+  {% endif %}
+  {% if not me.current_bot_id %}
+    <div class="ui warning message">
+      <div class="header">Team not ready!</div>
+      Your team is not ready to play. <a href="{{ url_for('main.team') }}">Go to the team management page</a> to upload and select a bot.
+    </div>
+  {% endif %}
+  <div class="ui stackable grid container">
+    <div class="ten wide column">
+      <h2>Team Standings</h2>
+      <table class="ui celled striped table">
+        <thead>
+          <tr><th>Name</th><th>ELO</th><th>Wins</th><th>Losses</th><th>Challenge</th></tr>
+        </thead>
+        <tbody>
+          {% for team in leaderboard %}
+            {% set can = team.id != me.id and team.current_bot_id is not none and me.current_bot_id and not me.is_disabled
+                         and s.flag('challenges_enabled') and (team.is_reference or not s.flag('challenges_only_reference')) %}
+            {% set needs_accept = s.flag('down_challenges_require_accept') and not team.is_reference and me.elo > team.elo %}
+            <tr{% if team.id == me.id %} class="active"{% elif team.is_reference %} class="warning"{% endif %}>
+              <td>{{ team.name }}</td>
+              <td class="center"><div class="ui mini statistic"><div class="value">{{ team.elo|int }}</div></div></td>
+              <td class="center"><div class="ui mini green statistic"><div class="value">{{ team.wins }}</div></div></td>
+              <td class="center"><div class="ui mini red statistic"><div class="value">{{ team.losses }}</div></div></td>
+              <td class="center">
+                <form class="inline" action="{{ url_for('main.challenge') }}" method="POST">
+                  {{ csrf() }}
+                  <input type="hidden" name="team_id" value="{{ team.id }}">
+                  <button class="ui primary icon button {{ '' if can else 'disabled' }}"
+                    title="{{ 'Challenge (they must accept)' if needs_accept else 'Challenge' }}"><i class="rocket icon"></i></button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if s.flag('challenges_enabled') %}
+        <p>
+          Challenges for people of higher ELO will automatically be accepted.
+          Challenges for reference (yellow) players will also automatically be accepted.
+          {% if s.flag('down_challenges_require_accept') %}Challenges for people of lower ELO must be accepted by them.{% endif %}
+        </p>
+      {% else %}
+        <p>Challenges are currently disabled.</p>
+      {% endif %}
+    </div>
+    <div class="six wide column">
+      <h2>Challenges</h2>
+      <div class="ui segments">
+        {% for r in incoming %}
+          <div class="ui segment">
+            <h3 class="ui header">
+              <div class="right-floated">
+                {{ post_button(url_for('main.answer_challenge', request_id=r.id), 'Accept', 'positive', None, {'action': 'accept'}) }}
+                {{ post_button(url_for('main.answer_challenge', request_id=r.id), 'Reject', 'negative', None, {'action': 'reject'}) }}
+              </div>
+              <div class="content">
+                {{ r.team_name }}
+                <div class="sub header">{{ r.created_at|ago }}</div>
+              </div>
+            </h3>
+          </div>
+        {% else %}
+          <div class="ui segment">When people of higher ELO challenge you, their requests will appear here.</div>
+        {% endfor %}
+      </div>
+      <h3>Outgoing challenges</h3>
+      <div class="ui segments">
+        {% for r in outgoing %}
+          <div class="ui segment">
+            <h3 class="ui header">
+              <div class="right-floated">
+                {{ post_button(url_for('main.cancel_challenge', request_id=r.id), 'Withdraw', 'mini basic negative') }}
+              </div>
+              <div class="content">
+                To: {{ r.team_name }}
+                <div class="sub header">{{ r.created_at|ago }}</div>
+              </div>
+            </h3>
+          </div>
+        {% else %}
+          <div class="ui segment">Your outgoing requests appear here.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <br>
+  {{ announcements_list(latest, 'Most Recent Announcement') }}
+  {{ recent_games(recent) }}
+{% endblock %}
