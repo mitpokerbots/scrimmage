@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_macros.html" import statistic %}
+{% block content %}
+  <h1>Sponsor Access - {{ team.name }}</h1>
+  <div><a class="ui left labeled icon button" href="{{ url_for('sponsor.index') }}"><i class="left arrow icon"></i> Back</a></div>
+  <br>
+  <div class="ui stackable grid container">
+    <div class="eight wide column">
+      <h2>Info</h2>
+      <h3>Statistics</h3>
+      <div class="ui four small statistics">
+        {{ statistic(team.elo|int, 'ELO') }}
+        {{ statistic(team.wins, 'Wins', 'green') }}
+        {{ statistic(team.losses, 'Losses', 'red') }}
+        {{ statistic(team.wins + team.losses + team.ties, 'Total Games') }}
+      </div>
+      <h3 class="ui header">Team</h3>
+      <table class="ui striped celled table">
+        <thead><tr><th>Name</th><th>Email</th></tr></thead>
+        <tbody>
+          {% for m in members %}
+            <tr><td>{{ m.display_name or 'Unavailable' }}</td><td><a href="mailto:{{ m.kerberos }}@mit.edu">{{ m.kerberos }}@mit.edu</a></td></tr>
+          {% else %}
+            <tr><td colspan="2">No members.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="eight wide column">
+      <h2>Bots</h2>
+      <p>Their current bot is highlighted below.</p>
+      <table class="ui compact celled striped table">
+        <thead><tr><th>Name</th><th>Wins</th><th>Losses</th><th>Created</th></tr></thead>
+        <tbody>
+          {% for bot in bots %}
+            <tr{% if bot.id == team.current_bot_id %} class="positive"{% endif %}>
+              <td>{{ bot.name }}</td><td>{{ bot.wins }}</td><td>{{ bot.losses }}</td><td>{{ bot.created_at|time }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4">They don't have any bots.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <h2>Charts</h2>
+  <div class="ui text container">{{ chart }}</div>
+{% endblock %}

@@ -1,0 +1,560 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  MIT Pokerbots scrimmage server: one main EC2 instance (website, database, a
+  few match slots), an elastic fleet of worker instances for more matches at
+  once (sized from the admin dashboard), an encrypted data volume with daily
+  snapshots, a nightly off-site archive in S3, and no SSH (use Session
+  Manager). See README.md.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: Site }
+        Parameters: [DomainName, AdminKerberos, ContactEmail]
+      - Label: { default: Size and cost }
+        Parameters: [InstanceType, FleetMaxVcpus, WorkerPricing, DataVolumeSize, AlertEmail, MonthlyBudgetUSD]
+      - Label: { default: Advanced }
+        Parameters: [RepositoryUrl, Branch]
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Public host name, e.g. scrimmage.pokerbots.org. Point its DNS A record at the IP in the stack outputs.
+    AllowedPattern: "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+  AdminKerberos:
+    Type: String
+    Description: Comma-separated kerberos usernames that get admin access on first login.
+  ContactEmail:
+    Type: String
+    Default: pokerbots@mit.edu
+    Description: Shown on the site, used for Let's Encrypt, and given to Touchstone.
+  InstanceType:
+    Type: String
+    Default: m8g.large
+    Description: >-
+      The main server. It runs one match per vCPU itself (m8g.large = 2), so it
+      must be the same CPU as the fleet (Graviton4). More capacity comes from
+      the fleet, not from resizing this.
+    AllowedValues: [m8g.medium, m8g.large, m8g.xlarge, m8g.2xlarge, r8g.large, r8g.xlarge]
+  FleetMaxVcpus:
+    Type: Number
+    Default: 1024
+    MinValue: 0
+    Description: >-
+      Most worker cores admins can request (each worker is a 16-core
+      m8g.4xlarge). A game uses 1, 2, 4 or 8 of them, as the admins choose. AWS
+      also limits this per account: raise the EC2 vCPU quota in Service Quotas
+      to match.
+  WorkerPricing:
+    Type: String
+    Default: spot
+    AllowedValues: [spot, on-demand]
+    Description: Spot is about 60% cheaper; reclaimed instances' games are simply replayed.
+  DataVolumeSize:
+    Type: Number
+    Default: 100
+    MinValue: 20
+    Description: GiB for the database, bots, and game logs. Can be increased later.
+  AlertEmail:
+    Type: String
+    Default: ""
+    Description: Optional. Gets an email when the server is unhealthy or the budget is exceeded.
+  MonthlyBudgetUSD:
+    Type: Number
+    Default: 150
+    Description: Monthly cost that triggers an alert email (needs AlertEmail).
+  RepositoryUrl:
+    Type: String
+    Default: https://github.com/mitpokerbots/scrimmage.git
+  Branch:
+    Type: String
+    Default: master
+
+Conditions:
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, ""]]
+  UseSpot: !Equals [!Ref WorkerPricing, spot]
+
+Resources:
+  # --- Network: public subnets in three zones (more spot capacity) ----------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: [{ Key: Name, Value: !Ref AWS::StackName }]
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: { VpcId: !Ref Vpc, InternetGatewayId: !Ref InternetGateway }
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref Vpc }
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.0.0/20
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-a" }]
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.16.0/20
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-b" }]
+  SubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.32.0/20
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-c" }]
+  RoutesA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref SubnetA, RouteTableId: !Ref RouteTable }
+  RoutesB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref SubnetB, RouteTableId: !Ref RouteTable }
+  RoutesC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref SubnetC, RouteTableId: !Ref RouteTable }
+
+  WorkerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Fleet workers accept no inbound connections.
+      VpcId: !Ref Vpc
+  MainSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTP and HTTPS from anywhere; the worker API only from fleet workers.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 8080, ToPort: 8080, SourceSecurityGroupId: !Ref WorkerSecurityGroup }
+
+  # --- Shared pieces -------------------------------------------------------------
+  WorkerToken:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Authenticates match workers to the scrimmage server's worker API.
+      GenerateSecretString: { PasswordLength: 48, ExcludePunctuation: true }
+  GameImages:
+    Type: AWS::ECR::Repository
+    Properties:
+      EmptyOnDelete: true
+      LifecyclePolicy:
+        LifecyclePolicyText: >-
+          {"rules":[{"rulePriority":1,"description":"keep the last 5 game images",
+          "selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":5},
+          "action":{"type":"expire"}}]}
+  # Off-site copy of everything on the data volume (scrimmage archive, nightly).
+  # Kept when the stack is deleted.
+  ArchiveBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      # Overwritten or deleted files stay recoverable for 30 days.
+      VersioningConfiguration: { Status: Enabled }
+      LifecycleConfiguration:
+        Rules:
+          - Id: old-versions
+            Status: Enabled
+            NoncurrentVersionExpiration: { NoncurrentDays: 30 }
+          # Daily database copies: a month at hand, then a cheap year, then gone.
+          - Id: database-copies
+            Status: Enabled
+            Prefix: database/daily/
+            Transitions: [{ StorageClass: GLACIER_IR, TransitionInDays: 30 }]
+            ExpirationInDays: 400
+
+  # --- Main server ----------------------------------------------------------------
+  MainRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+      Policies:
+        - PolicyName: scrimmage-main
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref WorkerToken
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
+                Resource: !GetAtt GameImages.Arn
+              - Effect: Allow
+                Action: [autoscaling:DescribeAutoScalingGroups, autoscaling:DescribeScalingActivities]
+                Resource: "*"
+              - Effect: Allow
+                Action: autoscaling:SetDesiredCapacity
+                Resource: !Sub "arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${AWS::StackName}-*"
+              # Nightly archive (scrimmage archive).
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject]
+                Resource: !Sub "${ArchiveBucket.Arn}/*"
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt ArchiveBucket.Arn
+              # Baking worker machine images (scrimmage bake-images): launch a
+              # worker from its template, image it, add a template version.
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeImages
+                  - ec2:DescribeLaunchTemplates
+                  - ec2:DescribeLaunchTemplateVersions
+                  - ec2:CreateImage
+                  - ec2:CreateTags
+                  - ec2:DeregisterImage
+                  - ec2:DeleteSnapshot
+                  - ec2:GetConsoleOutput
+                Resource: "*"
+              - Effect: Allow
+                Action: [ec2:RunInstances, ec2:CreateLaunchTemplateVersion, ec2:DeleteLaunchTemplateVersions]
+                Resource: !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:launch-template/*"
+                Condition:
+                  StringEquals: { "aws:ResourceTag/scrimmage-stack": !Ref AWS::StackName }
+              - Effect: Allow
+                Action: ec2:RunInstances
+                Resource:
+                  - !Sub "arn:aws:ec2:${AWS::Region}::image/*"
+                  - !Sub "arn:aws:ec2:${AWS::Region}::snapshot/*"
+                  - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:image/*"
+                  - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*"
+                  - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:volume/*"
+                  - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:network-interface/*"
+                  - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/*"
+                  - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/*"
+              - Effect: Allow
+                Action: ec2:TerminateInstances
+                Resource: "*"
+                Condition:
+                  StringEquals: { "aws:ResourceTag/scrimmage-bake": !Ref AWS::StackName }
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt WorkerRole.Arn
+              # Disk space alerts (scrimmage maintain).
+              - !If
+                - HasAlertEmail
+                - { Effect: Allow, Action: sns:Publish, Resource: !Ref AlertTopic }
+                - !Ref AWS::NoValue
+  MainProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: { Roles: [!Ref MainRole] }
+
+  # The image is resolved by EC2 at launch, so later stack updates never
+  # replace the instance just because Ubuntu published a newer image.
+  MainLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id
+        MetadataOptions: { HttpTokens: required, HttpPutResponseHopLimit: 1 }
+
+  DataVolume:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      AvailabilityZone: !GetAtt SubnetA.AvailabilityZone
+      Size: !Ref DataVolumeSize
+      VolumeType: gp3
+      Encrypted: true
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-data" }
+        - { Key: scrimmage-backup, Value: !Ref AWS::StackName }
+
+  Server:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref MainLaunchTemplate
+        Version: !GetAtt MainLaunchTemplate.LatestVersionNumber
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref MainProfile
+      SubnetId: !Ref SubnetA
+      # Fixed, so workers can find the server without depending on it.
+      PrivateIpAddress: 10.42.0.10
+      SecurityGroupIds: [!Ref MainSecurityGroup]
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: { VolumeSize: 40, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true }
+      Volumes:
+        - { Device: /dev/sdf, VolumeId: !Ref DataVolume }
+      Tags: [{ Key: Name, Value: !Ref AWS::StackName }]
+      UserData:
+        Fn::Base64: !Sub
+          - |
+            #!/bin/bash
+            # First boot only; afterwards, update with: sudo /opt/scrimmage/deploy/update.sh
+            set -euo pipefail
+            exec > >(tee -a /var/log/scrimmage-install.log) 2>&1
+            install -d -m 0755 /etc/scrimmage
+            cat > /etc/scrimmage/install.env <<'EOF'
+            DOMAIN=${DomainName}
+            ADMINS=${AdminKerberos}
+            CONTACT_EMAIL=${ContactEmail}
+            DATA_VOLUME_ID=${DataVolume}
+            AWS_REGION=${AWS::Region}
+            FLEET_GROUP=${AWS::StackName}-workers
+            WORKER_TOKEN_SECRET=${WorkerToken}
+            IMAGE_REPO=${GameImages.RepositoryUri}
+            ARCHIVE_BUCKET=${ArchiveBucket}
+            WORKER_TEMPLATE=${AWS::StackName}-worker
+            BAKE_SUBNET=${SubnetA}
+            ALERT_TOPIC=${AlertTopicArn}
+            EOF
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -q && apt-get install -yq git
+            if [ ! -d /opt/scrimmage/.git ]; then
+              git clone --branch '${Branch}' '${RepositoryUrl}' /opt/scrimmage
+            fi
+            /opt/scrimmage/deploy/install.sh
+          - AlertTopicArn: !If [HasAlertEmail, !Ref AlertTopic, ""]
+
+  PublicIp:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachment
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Server
+      Tags: [{ Key: Name, Value: !Ref AWS::StackName }]
+
+  # --- Worker fleet -----------------------------------------------------------------
+  WorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+      Policies:
+        - PolicyName: scrimmage-worker
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref WorkerToken
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action: [ecr:BatchCheckLayerAvailability, ecr:BatchGetImage, ecr:GetDownloadUrlForLayer]
+                Resource: !GetAtt GameImages.Arn
+  WorkerProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: { Roles: [!Ref WorkerRole] }
+
+  WorkerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${AWS::StackName}-worker"
+      TagSpecifications:
+        - ResourceType: launch-template
+          Tags: [{ Key: scrimmage-stack, Value: !Ref AWS::StackName }]
+      LaunchTemplateData:
+        ImageId: resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id
+        IamInstanceProfile: { Arn: !GetAtt WorkerProfile.Arn }
+        SecurityGroupIds: [!Ref WorkerSecurityGroup]
+        MetadataOptions: { HttpTokens: required, HttpPutResponseHopLimit: 1 }
+        # A worker that retires itself (outdated code, failed setup) is replaced.
+        InstanceInitiatedShutdownBehavior: terminate
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs: { VolumeSize: 40, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true }
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -uo pipefail
+            exec > >(tee -a /var/log/scrimmage-install.log) 2>&1
+            install -d -m 0755 /etc/scrimmage
+            cat > /etc/scrimmage/install.env <<'EOF'
+            SERVER_URL=http://10.42.0.10:8080
+            AWS_REGION=${AWS::Region}
+            WORKER_TOKEN_SECRET=${WorkerToken}
+            IMAGE_REPO=${GameImages.RepositoryUri}
+            EOF
+            export DEBIAN_FRONTEND=noninteractive
+            # A failed setup retires the machine (the fleet replaces it); a
+            # failed bake stays up for scrimmage bake-images to report.
+            fail() { [ -n "${!SCRIMMAGE_BAKE:-}" ] && exit 1; shutdown -h now; exit 1; }
+            # Baked images (scrimmage bake-images) already have all of this.
+            command -v git >/dev/null || { apt-get update -q && apt-get install -yq git curl python3; } || fail
+            # Run exactly the code the main server runs.
+            commit=""
+            for _ in $(seq 180); do
+              commit=$(curl -fsS http://10.42.0.10:8080/api/worker/version \
+                | python3 -c 'import json, sys; print(json.load(sys.stdin)["commit"])') && break
+              sleep 10
+            done
+            [ -d /opt/scrimmage/.git ] || git clone --quiet '${RepositoryUrl}' /opt/scrimmage || fail
+            git -C /opt/scrimmage cat-file -e "$commit^{commit}" 2>/dev/null \
+              || git -C /opt/scrimmage fetch --quiet origin || fail
+            git -C /opt/scrimmage checkout --quiet --force "$commit" \
+              && /opt/scrimmage/deploy/install-worker.sh \
+              || fail
+
+  WorkerFleet:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-workers"
+      # Capacity is counted in vCPUs (= cores): a game takes as many as it has
+      # cores. Admins set the desired capacity from the dashboard; it is
+      # deliberately not set here, so stack updates never resize a running fleet.
+      DesiredCapacityType: vcpu
+      MinSize: "0"
+      MaxSize: !Ref FleetMaxVcpus
+      VPCZoneIdentifier: [!Ref SubnetA, !Ref SubnetB, !Ref SubnetC]
+      MixedInstancesPolicy:
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref WorkerLaunchTemplate
+            # The newest version: the pre-baked image, once one exists.
+            Version: $Latest
+          Overrides:
+            - InstanceRequirements:
+                # Graviton4 only, like the main server: every match gets the
+                # same CPU, so time banks mean the same thing everywhere.
+                # Exactly 16 vCPUs and at least 4 GiB each, so games of any
+                # size pack the same way on every machine.
+                AllowedInstanceTypes: ["m8g.*", "m8gd.*", "r8g.*", "r8gd.*"]
+                VCpuCount: { Min: 16, Max: 16 }
+                MemoryMiB: { Min: 65536 }
+        InstancesDistribution:
+          OnDemandBaseCapacity: 0
+          OnDemandPercentageAboveBaseCapacity: !If [UseSpot, 0, 100]
+          SpotAllocationStrategy: price-capacity-optimized
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}-worker", PropagateAtLaunch: true }
+
+  # --- Backups: daily snapshots of the data volume, kept two weeks ------------
+  SnapshotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: dlm.amazonaws.com }, Action: sts:AssumeRole }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole
+  DailySnapshots:
+    Type: AWS::DLM::LifecyclePolicy
+    Properties:
+      Description: !Sub "${AWS::StackName} daily data snapshots"
+      State: ENABLED
+      ExecutionRoleArn: !GetAtt SnapshotRole.Arn
+      PolicyDetails:
+        ResourceTypes: [VOLUME]
+        TargetTags: [{ Key: scrimmage-backup, Value: !Ref AWS::StackName }]
+        Schedules:
+          - Name: daily
+            CopyTags: true
+            CreateRule: { Interval: 24, IntervalUnit: HOURS, Times: ["09:00"] }
+            RetainRule: { Count: 14 }
+
+  # --- Self-healing and alerts ---------------------------------------------------
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasAlertEmail
+    Properties:
+      Subscription: [{ Protocol: email, Endpoint: !Ref AlertEmail }]
+  RecoverOnHardwareFailure:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Move the main server to healthy hardware if AWS's system check fails.
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_System
+      Dimensions: [{ Name: InstanceId, Value: !Ref Server }]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: !If
+        - HasAlertEmail
+        - [!Sub "arn:aws:automate:${AWS::Region}:ec2:recover", !Ref AlertTopic]
+        - [!Sub "arn:aws:automate:${AWS::Region}:ec2:recover"]
+  RebootWhenUnresponsive:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Reboot the main server if its OS stops responding.
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_Instance
+      Dimensions: [{ Name: InstanceId, Value: !Ref Server }]
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: !If
+        - HasAlertEmail
+        - [!Sub "arn:aws:automate:${AWS::Region}:ec2:reboot", !Ref AlertTopic]
+        - [!Sub "arn:aws:automate:${AWS::Region}:ec2:reboot"]
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Condition: HasAlertEmail
+    Properties:
+      Budget:
+        BudgetName: !Sub "${AWS::StackName}-monthly"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: { Amount: !Ref MonthlyBudgetUSD, Unit: USD }
+      NotificationsWithSubscribers:
+        - Notification: { NotificationType: FORECASTED, ComparisonOperator: GREATER_THAN, Threshold: 100 }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref AlertEmail }]
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 80 }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref AlertEmail }]
+
+Outputs:
+  PublicIp:
+    Description: Create a DNS A record for your domain pointing here.
+    Value: !Ref PublicIp
+  SiteUrl:
+    Value: !Sub "https://${DomainName}/"
+  InstallLog:
+    Description: Follow the first-boot install (about 10 minutes) from a Session Manager shell.
+    Value: sudo tail -f /var/log/scrimmage-install.log
+  Shell:
+    Description: Open a shell on the main server (or EC2 console > Connect > Session Manager).
+    Value: !Sub "aws ssm start-session --region ${AWS::Region} --target ${Server}"

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_macros.html" import post_button, statistic %}
+{% block content %}
+  {% set p = progress %}
+  <h1>{{ tournament.title }}
+    {% if tournament.is_private %}<span class="ui red label">Private</span>{% endif %}</h1>
+  <p>{{ tournament.games_per_pair }} game{{ 's' if tournament.games_per_pair != 1 }} per pair · started {{ tournament.created_at|time }}
+    {% if tournament.finished_at %} · finished {{ tournament.finished_at|time }}{% endif %}</p>
+  {% if p.total %}
+    <progress class="tournament" value="{{ p.done + p.error }}" max="{{ p.total }}"></progress>
+    <div class="ui four small statistics">
+      {{ statistic(p.queued, 'Queued') }}
+      {{ statistic(p.running, 'Running') }}
+      {{ statistic(p.done, 'Completed', 'green') }}
+      {{ statistic(p.error, 'Errored', 'red') }}
+    </div>
+  {% endif %}
+
+  {% if g.is_admin %}
+    <h2 class="ui dividing header">Admin</h2>
+    <div class="ui segment">
+      {% if p.error %}{{ post_button(url_for('admin.tournament_action', tournament_id=tournament.id, action='retry'), 'Re-queue failed games', 'basic negative') }}{% endif %}
+      {% if p.queued %}{{ post_button(url_for('admin.tournament_action', tournament_id=tournament.id, action='cancel'), 'Cancel queued games', 'basic', 'Drop all queued games of this tournament?') }}{% endif %}
+      {% if tournament.is_private %}
+        {{ post_button(url_for('admin.tournament_action', tournament_id=tournament.id, action='public'), 'Make public', 'basic') }}
+      {% else %}
+        {{ post_button(url_for('admin.tournament_action', tournament_id=tournament.id, action='private'), 'Make private', 'basic') }}
+      {% endif %}
+      {{ post_button(url_for('admin.tournament_action', tournament_id=tournament.id, action='delete'), 'Delete', 'basic negative', 'Delete this tournament and all its games and logs?') }}
+      <p>Export: <a href="{{ url_for('admin.tournament_csv', tournament_id=tournament.id) }}">every game (CSV)</a> ·
+        <a href="{{ url_for('admin.tournament_logs', tournament_id=tournament.id) }}">every log (.tar)</a> ·
+        <a href="{{ url_for('admin.games', tournament=tournament.id) }}">browse its games</a></p>
+    </div>
+  {% endif %}
+
+  <h2>Standings</h2>
+  <table class="ui celled striped table">
+    <thead>
+      <tr><th>#</th><th>Name</th><th>Bot</th><th>ELO</th><th>Wins</th><th>Losses</th><th>Chips</th></tr>
+    </thead>
+    <tbody>
+      {% for e in standings %}
+        <tr{% if g.team and e.team_id == g.team.id %} class="active"{% endif %}>
+          <td>{{ loop.index }}</td>
+          <td>{{ e.team_name }}</td>
+          <td>{{ e.bot_name }}</td>
+          <td class="center">
+            <div class="ui mini statistic"><div class="value">{% if e.rating is not none %}{{ e.rating|int }}{% else %}N/A{% endif %}</div></div>
+            {% if e.rating is not none %}<div class="muted">±{{ e.rating_error|int }}</div>{% endif %}
+          </td>
+          <td class="center"><div class="ui mini green statistic"><div class="value">{{ e.wins }}</div></div></td>
+          <td class="center"><div class="ui mini red statistic"><div class="value">{{ e.losses }}</div></div></td>
+          <td class="center">{{ e.chips }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if tournament.status != 'done' %}
+    <p>Ratings are provisional until every game has been played; they are refitted from all finished games every minute.</p>
+  {% endif %}
+{% endblock %}

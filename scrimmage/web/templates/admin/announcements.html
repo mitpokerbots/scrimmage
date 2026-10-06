@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button %}
+{% block content %}
+  <h1>Admin: Announcements</h1>
+  <h2 class="ui dividing header">Make an announcement</h2>
+  <div class="ui segment">
+    <form class="ui form" method="POST" action="{{ url_for('admin.create_announcement') }}">
+      {{ csrf() }}
+      <div class="field">
+        <label>Title</label>
+        <input type="text" name="title" placeholder="Example announcement" required maxlength="200">
+      </div>
+      <div class="field">
+        <label>Announcement text</label>
+        <textarea name="body" rows="2" required></textarea>
+      </div>
+      <div class="field">
+        <div class="ui checkbox">
+          <input type="checkbox" name="is_public" value="1" id="is_public">
+          <label for="is_public">Make this announcement public (visible when not logged in)</label>
+        </div>
+      </div>
+      <button class="ui primary button" type="submit">Announce</button>
+    </form>
+  </div>
+
+  <h2 class="ui dividing header">Edit announcements</h2>
+  {% for a in announcements %}
+    <div class="ui top attached segment">
+      <h3 class="ui header">
+        {{ a.title }}
+        {% if a.is_public %}<span class="ui red label">Public</span>{% endif %}
+        <div class="sub header">{{ a.created_at|ago }} by {{ a.author or 'unknown' }}</div>
+      </h3>
+      <p>{{ a.body }}</p>
+      {{ post_button(url_for('admin.delete_announcement', announcement_id=a.id), 'Delete', 'mini basic negative', 'Delete this announcement?') }}
+    </div>
+  {% else %}
+    <p>There are no announcements to show.</p>
+  {% endfor %}
+  <br>
+{% endblock %}

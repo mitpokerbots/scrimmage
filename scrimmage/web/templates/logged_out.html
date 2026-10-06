@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% from "_macros.html" import announcements_list, recent_games %}
+{% block content %}
+  <h1>MIT Pokerbots Scrimmage Server</h1>
+  <p>Please <a href="{{ url_for('auth.login') }}">log in</a> to continue. You need an MIT Touchstone account.</p>
+  {{ announcements_list(announcements) }}
+  {{ recent_games(recent) }}
+{% endblock %}

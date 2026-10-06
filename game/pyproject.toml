@@ -1,0 +1,34 @@
+# Python packages available to student bots (and to the engine) inside the
+# game sandbox. Locked in uv.lock; rebuild the game image after changing.
+#   cd game && uv lock --upgrade-package <name>
+[project]
+name = "scrimmage-bot-environment"
+version = "2027.0"
+requires-python = "==3.13.*"
+dependencies = [
+    "pkrbot==1.1.0",
+    "cython>=3.2",
+    "numpy",
+    "scipy",
+    "pandas",
+    "scikit-learn",
+    "torch==2.12.0",
+    "tensorflow",
+    "gensim",
+    "nltk",
+]
+
+[tool.uv]
+package = false
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

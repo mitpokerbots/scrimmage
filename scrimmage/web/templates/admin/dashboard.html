@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, statistic, friendly_status %}
+{% block content %}
+  {% set s = settings() %}
+  <h1>Admin: Home</h1>
+  <h2>Links</h2>
+  <ul>
+    <li><a href="{{ url_for('admin.announcements') }}">Make announcement</a></li>
+    <li><a href="{{ url_for('admin.settings_page') }}">Change settings</a></li>
+    <li><a href="{{ url_for('admin.impersonate_page') }}">Impersonate people</a></li>
+    <li><a href="{{ url_for('admin.teams') }}">Manage teams</a></li>
+    <li><a href="{{ url_for('admin.users') }}">Manage users</a></li>
+    <li><a href="{{ url_for('admin.tournament_list') }}">Manage tournaments</a></li>
+    <li><a href="{{ url_for('admin.games') }}">View all games</a></li>
+  </ul>
+
+  <h2 class="ui dividing header">Queue</h2>
+  <div class="ui five small statistics">
+    {{ statistic(counts.queued, 'Queued') }}
+    {{ statistic(counts.running, 'Running') }}
+    {{ statistic(counts.error, 'Errored', 'red') }}
+    {{ statistic(build_counts.queued + build_counts.running, 'Bots building') }}
+    {{ statistic(totals.games, 'Games played', 'green') }}
+  </div>
+  <p>{{ totals.users }} users · {{ totals.teams }} active teams · {{ totals.bots }} bots uploaded ·
+    data disk: {{ '%.0f'|format(disk[0] / 1e9) }} GB free of {{ '%.0f'|format(disk[1] / 1e9) }} GB ·
+    <a href="{{ url_for('admin.games', status='error') }}">failed games</a></p>
+  {% if disk[0] < disk_warn %}
+    <div class="ui negative message">
+      <div class="header">The data disk has only {{ '%.1f'|format(disk[0] / 1e9) }} GB free.</div>
+      Below {{ '%.0f'|format(disk_min / 1e9) }} GB the server stops accepting new bots. Increase <code>DataVolumeSize</code>
+      in the CloudFormation stack (it grows without downtime), or delete old data.
+    </div>
+  {% endif %}
+
+  <h2 class="ui dividing header">Game capacity</h2>
+  <p><strong>{{ games_running }}</strong> games running on <strong>{{ cores_busy }} of {{ cores_online }}</strong> worker cores.
+    The main server contributes {{ local_cores }} cores; games with more cores than that run on worker machines.</p>
+  <form class="ui form segment" method="POST" action="{{ url_for('admin.set_capacity') }}">
+    {{ csrf() }}
+    <div class="four fields">
+      <div class="field">
+        <label>Cores per game</label>
+        <select name="cores" class="ui dropdown">
+          {% for c in core_choices %}<option value="{{ c }}" {{ 'selected' if c == needs.cores }}>{{ hardware.label(c) }}, {{ '%g'|format(hardware.for_cores(c).bot_memory_mb / 1024) }} GB per bot</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Games at once</label>
+        <input name="capacity" type="number" min="0" value="{{ s.number('match_capacity') }}" required>
+      </div>
+      <div class="field">
+        <label>After this many idle minutes</label>
+        <input name="idle_minutes" type="number" min="0" value="{{ s.number('idle_minutes') }}" required>
+      </div>
+      <div class="field">
+        <label>go back to this many games</label>
+        <input name="idle_capacity" type="number" min="0" value="{{ s.number('idle_match_capacity') }}" required>
+      </div>
+    </div>
+    <button class="ui primary button">Apply</button>
+  </form>
+  <div class="ui info message">
+    <p>Every game runs on {{ hardware.CPU }}. Bots take turns, so "cores per game" is how many threads each bot can use
+      while it thinks. Changes apply to games created from now on.</p>
+    {% if has_fleet %}
+      <p>At this capacity the worker machines cost about <strong>${{ '%.2f'|format(hourly_spot) }}/hour</strong> on spot
+        (${{ '%.2f'|format(hourly_on_demand) }} on demand) while they run, and ${{ '%.2f'|format(idle_hourly_on_demand) }}/hour
+        on demand once capacity goes back to the idle setting. New machines take a minute or two to start; 0 idle minutes = never scale down.</p>
+    {% endif %}
+    <p>The main server ({{ main_server }}) costs about ${{ '%.0f'|format(main_server_monthly) }}/month on its own.
+      <a href="{{ url_for('admin.tournament_list') }}#cost">Estimate a tournament's cost</a>.</p>
+  </div>
+
+  {% if fleet_error %}
+    <div class="ui negative message">Worker machines: {{ fleet_error }}</div>
+  {% elif fleet_status %}
+    <p><strong>Worker machines:</strong> {{ fleet_status.instances }} running
+      ({{ fleet_status.in_service }} cores in service{% if fleet_status.starting %}, {{ fleet_status.starting }} starting{% endif %};
+      {{ fleet_status.desired }} requested, limit {{ fleet_status.maximum }}).</p>
+    {% if fleet_status.problem %}
+      <div class="ui negative message">
+        <div class="header">AWS could not add worker machines</div>
+        <p>{{ fleet_status.problem }}</p>
+        {% if 'limit' in fleet_status.problem|lower or 'quota' in fleet_status.problem|lower %}
+          <p>Request a higher quota in the AWS console: Service Quotas &gt; Amazon EC2 &gt;
+            "All Standard (A, C, D, H, I, M, R, T, Z) Spot Instance Requests"
+            (or "Running On-Demand Standard instances", if workers run on demand).</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <p>No worker machines are configured, so games run only on the main server.</p>
+  {% endif %}
+
+  <h2 class="ui dividing header">Workers</h2>
+  <table class="ui celled striped compact table">
+    <thead><tr><th>Worker</th><th>State</th><th>Busy cores</th><th>Jobs</th><th>Code</th><th>Last heartbeat</th></tr></thead>
+    <tbody>
+      {% for w in workers %}
+        {% set age = now - w.updated_at %}
+        <tr class="{{ 'negative' if w.cores and age > stale_after }}">
+          <td>{{ 'main server' if w.name == 'main' else w.name }}</td>
+          <td>{% if w.cores == 0 %}Stopped{% elif age > stale_after %}Not responding{% else %}Running{% endif %}</td>
+          <td>{{ w.busy_cores }} / {{ w.cores }}</td>
+          <td>{{ w.games }}</td>
+          <td>{{ w.commit_id[:8] }}{% if w.commit_id != commit %} <span class="ui mini red label">outdated</span>{% endif %}</td>
+          <td>{{ w.updated_at|ago }}</td>
+        </tr>
+      {% else %}
+        <tr class="negative"><td colspan="6">No worker has reported in. Games wait in the queue until one starts.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2 class="ui dividing header">Recent failures</h2>
+  <table class="ui celled compact table">
+    <thead><tr><th>#</th><th>Challenger</th><th>Opponent</th><th>Time</th><th>Error</th></tr></thead>
+    <tbody>
+      {% for game in errors %}
+        <tr>
+          <td><a href="{{ url_for('admin.game_detail', game_id=game.id) }}">{{ game.id }}</a></td>
+          <td>{{ game.team_a_name }}</td>
+          <td>{{ game.team_b_name }}</td>
+          <td>{{ game.created_at|ago }}</td>
+          <td><pre class="error">{{ game.error }}</pre></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5">No failed games.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

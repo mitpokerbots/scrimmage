@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block content %}
+  <h1>One-time login link</h1>
+  <p>This link logs you in once and then stops working.</p>
+  <form class="ui form" method="POST" action="{{ url_for('auth.redeem_link', token=token) }}">
+    {{ csrf() }}
+    <button class="ui primary button">Log in</button>
+  </form>
+{% endblock %}

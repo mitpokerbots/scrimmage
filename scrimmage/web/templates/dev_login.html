@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block content %}
+  <h1>Development login</h1>
+  <div class="ui warning message">This server runs with <code>AUTH_MODE=dev</code>: anyone can log in as anyone. Production uses Touchstone.</div>
+  <form class="ui form" method="POST" action="{{ url_for('auth.dev_login') }}">
+    {{ csrf() }}
+    <div class="field">
+      <label>Kerberos</label>
+      <input type="text" name="kerberos" placeholder="(i.e. 'jserrino')" required autofocus pattern="[a-z0-9._-]+">
+    </div>
+    <button class="ui primary button">Log in</button>
+  </form>
+{% endblock %}

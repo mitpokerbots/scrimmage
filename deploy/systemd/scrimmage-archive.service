@@ -1,0 +1,21 @@
+[Unit]
+Description=Scrimmage: copy the database, bots, and logs to the S3 archive
+
+[Service]
+Type=oneshot
+User=scrimmage
+Group=scrimmage
+EnvironmentFile=/etc/scrimmage/env
+EnvironmentFile=-/etc/scrimmage/env.local
+WorkingDirectory=/opt/scrimmage
+UMask=0077
+ExecStart=/opt/scrimmage/.venv/bin/scrimmage archive
+Nice=10
+IOSchedulingClass=idle
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/srv/scrimmage
+PrivateTmp=yes
+PrivateDevices=yes

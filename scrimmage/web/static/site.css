@@ -1,0 +1,29 @@
+/* Layout and the few rules the original pages set inline (inline styles are
+   blocked by the Content-Security-Policy). Everything else is Semantic UI. */
+body { display: flex; flex-direction: column; min-height: 100vh; }
+.ui.menu .item img.logo { margin-right: 1.5em; }
+.main.container { flex: 1 0 auto; }
+.ui.inverted.menu { border-radius: 0; }
+
+td.center, th.center { text-align: center !important; }
+form.inline { display: inline-block; margin: 0; }
+.right-floated { float: right; }
+.muted { color: rgba(0, 0, 0, 0.5); }
+pre.error { white-space: pre-wrap; margin: 0; font-size: 0.85em; max-height: 12em; overflow: auto; }
+.columns { columns: 4 12em; margin: 0.5em 0 1em; }
+
+/* Log out is a POST form in the menu. */
+.ui.menu form.item { padding: 0; }
+.ui.menu form.item button {
+  background: none; border: 0; color: inherit; font: inherit; cursor: pointer;
+  padding: 0.92857143em 1.14285714em;
+}
+
+/* Progress bars without Semantic's JavaScript. */
+progress.tournament { width: 100%; height: 1.5em; }
+
+/* Rating chart (server-rendered SVG). */
+svg.chart { width: 100%; height: auto; }
+svg.chart .line { fill: none; stroke: #2185d0; stroke-width: 2; }
+svg.chart .grid { stroke: rgba(34, 36, 38, 0.15); }
+svg.chart text { font-size: 11px; fill: rgba(0, 0, 0, 0.6); }

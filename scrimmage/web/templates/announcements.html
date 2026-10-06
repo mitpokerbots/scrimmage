@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% from "_macros.html" import announcements_list %}
+{% block content %}
+  {{ announcements_list(announcements) }}
+{% endblock %}

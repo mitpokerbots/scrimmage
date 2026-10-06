@@ -1,0 +1,13 @@
+#!/bin/sh
+# /usr/local/bin/scrimmage: run the scrimmage CLI as the service user with the
+# server's configuration, e.g. `sudo scrimmage login-link alice`.
+set -eu
+set -a
+. /etc/scrimmage/env
+. /etc/scrimmage/env.local
+set +a
+if [ "$(id -u)" = 0 ]; then
+  exec setpriv --reuid=scrimmage --regid=scrimmage --init-groups -- \
+    /opt/scrimmage/.venv/bin/scrimmage "$@"
+fi
+exec /opt/scrimmage/.venv/bin/scrimmage "$@"

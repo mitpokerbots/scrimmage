@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, announcements_list %}
+{% block content %}
+  <h1>Welcome to the MIT Pokerbots Scrimmage Server!</h1>
+
+  {% if not join_request %}
+  <div class="ui placeholder segment">
+    <div class="ui two column stackable center aligned grid">
+      <div class="ui vertical divider">Or</div>
+      <div class="middle aligned row">
+        <div class="column">
+          <div class="ui icon header">
+            <i class="group icon"></i>
+            Join a team
+            <div class="sub header">For most participants.</div>
+          </div>
+          <form class="ui form" action="{{ url_for('main.request_join') }}" method="POST">
+            {{ csrf() }}
+            <div class="ui action input">
+              <select class="ui compact selection dropdown" name="team_id" {{ 'disabled' if not teams }}>
+                {% for team in teams %}
+                  <option value="{{ team.id }}">{{ team.name }} ({{ team.size }}/{{ settings().number('maximum_team_size') }})</option>
+                {% else %}
+                  <option>No teams available to join</option>
+                {% endfor %}
+              </select>
+              <button class="ui basic primary button {{ 'disabled' if not teams }}">Request</button>
+            </div>
+          </form>
+        </div>
+        <div class="column">
+          <div class="ui icon header">
+            <i class="plus circle icon"></i>
+            Create a team
+            <div class="sub header">For team leaders and solo competitors.</div>
+          </div>
+          <form class="ui form" action="{{ url_for('main.create_team') }}" method="POST">
+            {{ csrf() }}
+            <div class="ui action input">
+              <input type="text" placeholder="Team name" name="name" required maxlength="40">
+              <button class="ui basic primary button">Create</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="ui placeholder segment">
+    <div class="ui icon header">
+      <i class="group icon"></i>
+      Request pending - {{ join_request.team_name }}
+      <div class="sub header">
+        You have requested to join {{ join_request.team_name }}. They must accept before you can join.
+      </div>
+    </div>
+    <form class="ui form" action="{{ url_for('main.cancel_join') }}" method="POST">
+      {{ csrf() }}
+      <button class="ui basic negative button">Cancel request</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {{ announcements_list(latest, 'Most Recent Announcement') }}
+{% endblock %}

@@ -1,0 +1,89 @@
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+
+{% macro post_button(action, label, cls='', confirm=None, fields={}, title=None) -%}
+<form method="post" action="{{ action }}" class="inline"{% if confirm %} data-confirm="{{ confirm }}"{% endif %}>
+  {{ csrf() }}
+  {% for name, value in fields.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+  <button class="ui {{ cls }} button"{% if title %} title="{{ title }}"{% endif %}>{{ label }}</button>
+</form>
+{%- endmacro %}
+
+{% macro friendly_status(game) -%}
+  {{ {'queued': 'Queued', 'running': 'In Progress', 'done': 'Completed', 'error': 'Internal error'}[game.status] }}
+{%- endmacro %}
+
+{% macro winner_name(game) -%}
+  {% if game.status != 'done' %}N/A
+  {% elif game.winner == 'a' %}{{ game.team_a_name }}
+  {% elif game.winner == 'b' %}{{ game.team_b_name }}
+  {% else %}Tie{% endif %}
+{%- endmacro %}
+
+{% macro elo(value) -%}{% if value is not none %}{{ value|round|int }}{% else %}N/A{% endif %}{%- endmacro %}
+
+{% macro log_link(game, kind, label='Log') -%}
+  {% if game.status in ('done', 'error') %}<a href="{{ url_for('main.game_log', game_id=game.id, kind=kind) }}">{{ label }}</a>{% else %}Not available{% endif %}
+{%- endmacro %}
+
+{% macro announcements_list(announcements, title='Announcements') -%}
+<div class="container">
+  <h2>{{ title }}</h2>
+  {% for a in announcements %}
+    <div class="ui top attached segment">
+      <h3 class="ui header">
+        {{ a.title }}
+        <div class="sub header">{{ a.created_at|ago }}{% if a.author %} by {{ a.author }}{% endif %}</div>
+      </h3>
+      <p>{{ a.body }}</p>
+    </div>
+  {% else %}
+    <p>There are no announcements to show.</p>
+  {% endfor %}
+  <br>
+</div>
+{%- endmacro %}
+
+{% macro recent_games(games) -%}
+<div class="container">
+  <h2>Recent Games</h2>
+  <table class="ui celled condensed table">
+    <thead><tr><th>Challenger</th><th>Opponent</th><th>Time</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for game in games %}
+        <tr{% if game.status == 'error' %} class="disabled"{% endif %}>
+          <td{% if game.winner == 'a' %} class="positive"{% elif game.winner == 'b' %} class="negative"{% endif %}>{{ game.team_a_name }}</td>
+          <td{% if game.winner == 'b' %} class="positive"{% elif game.winner == 'a' %} class="negative"{% endif %}>{{ game.team_b_name }}</td>
+          <td>{{ game.created_at|ago }}</td>
+          <td>{{ friendly_status(game) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4">No games have been played yet! Check back in soon</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<br>
+{%- endmacro %}
+
+{% macro pager(page, has_next, endpoint, args={}) -%}
+<div class="ui pagination menu">
+  {% if page > 1 %}
+    <a class="item" href="{{ url_for(endpoint, page=page - 1, **args) }}"><i class="angle left icon"></i></a>
+  {% else %}
+    <div class="disabled item"><i class="angle left icon"></i></div>
+  {% endif %}
+  <div class="active item">{{ page }}</div>
+  {% if has_next %}
+    <a class="item" href="{{ url_for(endpoint, page=page + 1, **args) }}"><i class="angle right icon"></i></a>
+  {% else %}
+    <div class="disabled item"><i class="angle right icon"></i></div>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{% macro statistic(value, label, color='') -%}
+<div class="{{ color }} statistic">
+  <div class="value">{{ value }}</div>
+  <div class="label">{{ label }}</div>
+</div>
+{%- endmacro %}

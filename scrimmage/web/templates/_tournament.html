@@ -1,0 +1,25 @@
+{# One tournament's summary, as on the original tournaments page. Needs: t (a tournaments.listing row), link. #}
+{% from "_macros.html" import statistic %}
+<div class="ui segment {{ 'green' if t.status == 'done' else 'black' }}">
+  <h3 class="ui dividing header">
+    <a href="{{ link }}">{{ t.title }}</a>
+    {% if t.is_private %}<span class="ui red label">Private</span>{% endif %}
+    <div class="sub header">{{ t.created_at|ago }}</div>
+  </h3>
+  <div class="ui stackable divided grid container">
+    <div class="six wide column">
+      <div class="ui two small statistics">
+        {{ statistic(t.entrants, 'Participants') }}
+        {{ statistic(t.games_per_pair, 'Games/Pair') }}
+      </div>
+    </div>
+    <div class="ten wide column">
+      <progress class="tournament" value="{{ t.done_games + t.error_games }}" max="{{ t.total_games or 1 }}"></progress>
+      <p>
+        {% if t.status == 'done' %}Done!
+        {% else %}{{ t.running_games }} games running. {{ t.queued_games }} to go.{% endif %}
+        {% if t.error_games %}<strong>{{ t.error_games }} errored.</strong>{% endif %}
+      </p>
+    </div>
+  </div>
+</div>

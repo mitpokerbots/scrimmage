@@ -1,0 +1,34 @@
+[Unit]
+Description=Pokerbots scrimmage match worker
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+User=scrimmage-worker
+Group=scrimmage-worker
+SupplementaryGroups=docker
+EnvironmentFile=/etc/scrimmage/worker.env
+WorkingDirectory=/opt/scrimmage
+UMask=0077
+ExecStart=/opt/scrimmage/.venv/bin/scrimmage worker
+# On stop the worker kills its match containers and the server requeues their games.
+KillSignal=SIGTERM
+TimeoutStopSec=90
+Restart=always
+RestartSec=5
+# Exit 3 = the server runs newer code. A fleet machine then powers off, which
+# terminates it, and the fleet launches an up-to-date replacement.
+RestartPreventExitStatus=3
+ExecStopPost=+/bin/sh -c 'if [ "$$EXIT_STATUS" = 3 ] && [ "$${FLEET_WORKER:-0}" = 1 ]; then /usr/sbin/shutdown -h now; fi'
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/scrimmage-worker
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+
+[Install]
+WantedBy=multi-user.target
