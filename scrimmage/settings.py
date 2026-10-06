@@ -7,6 +7,7 @@ rejected rather than stored.
 
 from __future__ import annotations
 
+import datetime
 import sqlite3
 from dataclasses import dataclass
 
@@ -21,6 +22,8 @@ class Setting:
     secret: bool = False
     # Edited on the admin dashboard rather than the settings page.
     hidden: bool = False
+    # A YYYY-MM-DD date (or empty).
+    date: bool = False
 
     def parse(self, raw: str) -> bool | int | str:
         if isinstance(self.default, bool):
@@ -38,7 +41,13 @@ class Setting:
             if self.maximum is not None and value > self.maximum:
                 raise ValueError(f"{self.key} must be at most {self.maximum}")
             return value
-        return raw.strip()
+        text = raw.strip()
+        if self.date and text:
+            try:
+                datetime.date.fromisoformat(text)
+            except ValueError:
+                raise ValueError(f"{self.key} must be a date like 2027-01-04, or empty") from None
+        return text
 
     @staticmethod
     def serialize(value: bool | int | str) -> str:
@@ -48,6 +57,13 @@ class Setting:
 
 
 SETTINGS: tuple[Setting, ...] = (
+    Setting(
+        "site_opens_on",
+        "2027-01-04",
+        "Until this date (YYYY-MM-DD, midnight Eastern), only admins can use the site; "
+        "everyone else sees a countdown. Empty = open.",
+        date=True,
+    ),
     Setting("challenges_enabled", True, "Teams can challenge each other."),
     Setting("challenges_only_reference", False, "Teams may only challenge reference teams."),
     Setting(

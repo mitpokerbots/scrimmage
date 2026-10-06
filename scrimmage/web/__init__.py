@@ -61,6 +61,7 @@ def create_app(config: Config | None = None) -> Flask:
     app.register_blueprint(worker_api.bp)
 
     app.before_request(common.load_user)
+    app.before_request(common.offseason_gate)
     app.before_request(common.check_csrf)
     app.teardown_appcontext(common.close_conn)
     # Globals (not a context processor) so imported macros can use them too.

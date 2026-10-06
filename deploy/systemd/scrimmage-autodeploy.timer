@@ -1,0 +1,9 @@
+[Unit]
+Description=Check for new scrimmage commits to deploy
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=30s
+
+[Install]
+WantedBy=timers.target

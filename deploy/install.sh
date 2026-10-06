@@ -35,11 +35,19 @@ COMMIT=$(git -C "$APP" rev-parse HEAD)
 export DEBIAN_FRONTEND=noninteractive
 
 # --- Packages --------------------------------------------------------------------
-log "Installing packages"
-apt-get update -q
-apt-get install -yq --no-install-recommends \
-  apache2 libapache2-mod-shib docker.io docker-buildx amazon-ecr-credential-helper git curl sqlite3 \
-  ca-certificates unattended-upgrades chrony
+# Skipped when all are installed (every redeploy): security updates come from
+# unattended-upgrades, not from deploys.
+PACKAGES=(apache2 libapache2-mod-shib docker.io docker-buildx amazon-ecr-credential-helper git curl
+  sqlite3 ca-certificates unattended-upgrades chrony)
+# (Unknown packages make dpkg-query print an error line, which counts as missing.)
+missing=$(dpkg-query -W -f='${Status}\n' "${PACKAGES[@]}" 2>&1 | grep -cvx 'install ok installed' || true)
+if [ "$missing" -eq 0 ]; then
+  log "Packages already installed"
+else
+  log "Installing packages"
+  apt-get update -q
+  apt-get install -yq --no-install-recommends "${PACKAGES[@]}"
+fi
 # Kernel security updates only take effect after a reboot; do it at 5:30am ET.
 cat > /etc/apt/apt.conf.d/52scrimmage-reboot <<'EOF'
 Unattended-Upgrade::Automatic-Reboot "true";
@@ -128,7 +136,11 @@ fi
 
 # --- Shibboleth (Touchstone) --------------------------------------------------------------
 log "Configuring Shibboleth"
+shib_config() { cat /etc/shibboleth/*.xml /etc/shibboleth/*.pem 2>/dev/null | md5sum || true; }
+shib_before=$(shib_config)
 "$APP/deploy/touchstone.sh" configure
+shib_changed=no
+[ "$(shib_config)" = "$shib_before" ] || shib_changed=yes
 
 # --- Apache ------------------------------------------------------------------------------------
 log "Configuring Apache"
@@ -146,16 +158,19 @@ systemctl disable --now scrimmage-backup.timer >/dev/null 2>&1 || true
 rm -f /etc/systemd/system/scrimmage-backup.*
 for unit in scrimmage-web.service scrimmage-worker.service scrimmage-maintain.service \
   scrimmage-maintain.timer scrimmage-certs.service scrimmage-certs.timer \
-  scrimmage-archive.service scrimmage-archive.timer scrimmage-bake.service; do
+  scrimmage-archive.service scrimmage-archive.timer scrimmage-bake.service \
+  scrimmage-autodeploy.service scrimmage-autodeploy.timer; do
   install_units "$unit"
 done
 systemctl daemon-reload
 systemctl enable --now shibd apache2 scrimmage-web scrimmage-worker \
-  scrimmage-maintain.timer scrimmage-certs.timer
+  scrimmage-maintain.timer scrimmage-certs.timer scrimmage-autodeploy.timer
 if [ -n "$ARCHIVE_BUCKET" ]; then
   systemctl enable --now scrimmage-archive.timer
 fi
-systemctl restart shibd scrimmage-web scrimmage-worker
+# shibd only when its configuration changed: restarting it logs out anyone mid-login.
+[ "$shib_changed" = no ] || systemctl restart shibd
+systemctl restart scrimmage-web scrimmage-worker
 systemctl reload apache2
 if [ -n "$WORKER_TEMPLATE" ]; then
   # Fleet machines boot from an image with this commit already installed. Takes
@@ -164,5 +179,7 @@ if [ -n "$WORKER_TEMPLATE" ]; then
   systemctl restart --no-block scrimmage-bake
 fi
 
+install -d /var/lib/scrimmage-deploy
+echo "$COMMIT" > /var/lib/scrimmage-deploy/deployed
 log "Done. Site: https://$DOMAIN/"
 "$APP/deploy/touchstone.sh" status || true

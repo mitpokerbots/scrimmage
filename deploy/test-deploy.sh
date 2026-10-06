@@ -39,6 +39,15 @@ check "worker user cannot read the database" "! setpriv --reuid=scrimmage-worker
 check "shibd -t accepts MIT's legacy config" "shibd -t >/dev/null 2>&1"
 check "SP cert CN is the domain" "openssl x509 -in /etc/shibboleth/sp-signing-cert.pem -noout -subject | grep -q scrimmage.example.org"
 check "SP keys kept on the data volume" "[ -s /srv/shibboleth/sp-encrypt-key.pem ]"
+check "deployed commit recorded" "[ \"\$(cat /var/lib/scrimmage-deploy/deployed)\" = \"\$(git -C /opt/scrimmage rev-parse HEAD)\" ]"
+
+step "redeploy (what update.sh and autodeploy run)"
+redeploy_start=$(date +%s)
+PATH=/stubs:$PATH /opt/scrimmage/deploy/install.sh > /tmp/redeploy.log 2>&1 \
+  || { tail -40 /tmp/redeploy.log; exit 1; }
+echo "redeploy took $(( $(date +%s) - redeploy_start ))s"
+check "redeploy skips package installs" "grep -q 'Packages already installed' /tmp/redeploy.log"
+check "redeploy leaves shibd alone when its config is unchanged" "! grep -q 'systemctl restart shibd' /tmp/redeploy.log"
 
 step "start shibd, gunicorn, apache"
 # No public DNS here, so stand in a self-signed certificate for Let's Encrypt.
@@ -59,7 +68,7 @@ sleep 4
 H=(-sk --resolve scrimmage.example.org:443:127.0.0.1 --resolve scrimmage.example.org:80:127.0.0.1)
 U=https://scrimmage.example.org
 check "http redirects to https" "curl -s -o /dev/null -w '%{redirect_url}' http://scrimmage.example.org/ --resolve scrimmage.example.org:80:127.0.0.1 | grep -q '^https://scrimmage.example.org/'"
-check "home page via unix socket" "curl ${H[*]} $U/ | grep -q 'MIT Pokerbots Scrimmage Server'"
+check "home page via unix socket (off-season countdown)" "curl ${H[*]} $U/ | grep -q 'data-countdown'"
 check "healthz" "[ \"\$(curl ${H[*]} $U/healthz)\" = ok ]"
 check "HSTS header" "curl ${H[*]} -I $U/ | grep -qi strict-transport-security"
 check "static served by apache with caching" "curl ${H[*]} -I $U/static/site.css | grep -qi 'cache-control: public'"

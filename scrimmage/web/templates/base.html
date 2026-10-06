@@ -18,6 +18,7 @@
           <img class="logo" src="{{ url_for('static', filename='img/logo_clear.png') }}" alt="">
           Pokerbots Scrimmage
         </a>
+        {% if not countdown %}
         <a href="{{ url_for('main.index') }}" class="{{ 'active' if endpoint == 'main.index' }} item">Home</a>
         {% if g.user %}
           <a href="{{ url_for('main.announcements') }}" class="{{ 'active' if endpoint == 'main.announcements' }} item">Announcements</a>
@@ -36,6 +37,7 @@
         {% if g.is_admin %}
           <a href="{{ url_for('admin.dashboard') }}" class="{{ 'active' if endpoint.startswith('admin.') }} item">Admin</a>
           <a href="{{ url_for('sponsor.index') }}" class="{{ 'active' if endpoint.startswith('sponsor.') }} item">Sponsor</a>
+        {% endif %}
         {% endif %}
         {% if g.user %}
           <form method="post" action="{{ url_for('auth.logout') }}" class="right item">
@@ -56,6 +58,12 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="ui mini positive button">Cancel Impersonation</button>
           </form>
+        </div>
+      {% endif %}
+      {% if g.is_admin and site_opens_at() %}
+        <div class="ui info message">
+          The site is closed: until {{ site_opens_at().strftime('%B %-d, %Y') }}, everyone but admins sees a countdown.
+          Change <code>site_opens_on</code> in <a href="{{ url_for('admin.settings_page') }}">settings</a>.
         </div>
       {% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}

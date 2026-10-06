@@ -7,13 +7,13 @@ import secrets
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from functools import wraps
 from typing import Any
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
-from flask import abort, current_app, g, redirect, request, session, url_for
+from flask import abort, current_app, g, redirect, render_template, request, session, url_for
 from werkzeug.wrappers.response import Response
 
 from scrimmage import db
@@ -250,10 +250,40 @@ def visible_sides(game: sqlite3.Row) -> list[str]:
     return [side for side in ("a", "b") if game[f"team_{side}_id"] == g.team["id"]]
 
 
+def opens_at(s: Settings) -> datetime | None:
+    """When the site opens to non-admins (None: it is open)."""
+    text = s.text("site_opens_on")
+    if not text:
+        return None
+    opening = datetime.combine(date.fromisoformat(text), time(), tzinfo=TIMEZONE)
+    return opening if opening > datetime.now(TIMEZONE) else None
+
+
+# Reachable while the site is closed: logging in (so admins can), assets, and
+# the machinery that keeps running regardless.
+OPEN_ENDPOINTS = ("static", "healthz")
+OPEN_BLUEPRINTS = ("auth.", "worker_api.")
+
+
+def offseason_gate() -> str | Response | None:
+    """Before the site opens, non-admins see only a countdown."""
+    endpoint = request.endpoint or ""
+    if g.is_admin or endpoint in OPEN_ENDPOINTS or endpoint.startswith(OPEN_BLUEPRINTS):
+        return None
+    opening = opens_at(settings())
+    if opening is None:
+        return None
+    if request.method != "GET":
+        return redirect(url_for("main.index"))
+    return render_template("countdown.html", opening=opening, countdown=True)
+
+
 def template_globals(config: Config) -> dict[str, Any]:
     return {
         "csrf_token": csrf_token,
         "visible_sides": visible_sides,
         "site": config,
         "settings": settings,
+        "now_eastern": lambda: datetime.now(TIMEZONE),
+        "site_opens_at": lambda: opens_at(settings()),
     }

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+  {% set left = opening - now_eastern() %}
+  <div class="ui very padded center aligned basic segment">
+    <h1 class="ui huge header">
+      MIT Pokerbots {{ opening.year }}
+      <div class="sub header">The scrimmage server opens on {{ opening.strftime('%B %-d, %Y') }}.</div>
+    </h1>
+    <div class="ui four statistics countdown" data-countdown="{{ opening.timestamp()|int }}">
+      <div class="statistic"><div class="value" data-unit="days">{{ left.days }}</div><div class="label">Days</div></div>
+      <div class="statistic"><div class="value" data-unit="hours">{{ left.seconds // 3600 }}</div><div class="label">Hours</div></div>
+      <div class="statistic"><div class="value" data-unit="minutes">{{ (left.seconds // 60) % 60 }}</div><div class="label">Minutes</div></div>
+      <div class="statistic"><div class="value" data-unit="seconds">{{ left.seconds % 60 }}</div><div class="label">Seconds</div></div>
+    </div>
+    <p class="countdown-note">Until then, learn more at <a href="https://pokerbots.org">pokerbots.org</a>.</p>
+  </div>
+{% endblock %}

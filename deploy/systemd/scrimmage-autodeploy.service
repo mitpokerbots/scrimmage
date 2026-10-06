@@ -1,0 +1,8 @@
+[Unit]
+Description=Scrimmage: deploy new commits once CI passes
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/scrimmage/deploy/autodeploy.sh
+TimeoutStartSec=1h

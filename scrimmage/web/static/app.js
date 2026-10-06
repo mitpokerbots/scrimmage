@@ -20,3 +20,23 @@ window.addEventListener("pageshow", (event) => {
     button.disabled = false;
   }
 });
+
+// The off-season countdown ticks every second, and reloads when the site opens.
+const countdown = document.querySelector("[data-countdown]");
+if (countdown) {
+  const opensAt = Number(countdown.dataset.countdown) * 1000;
+  const units = { days: 86400, hours: 3600, minutes: 60, seconds: 1 };
+  const tick = () => {
+    let left = Math.max(0, Math.floor((opensAt - Date.now()) / 1000));
+    if (left === 0) {
+      window.location.reload();
+      return;
+    }
+    for (const [unit, size] of Object.entries(units)) {
+      countdown.querySelector(`[data-unit="${unit}"]`).textContent = Math.floor(left / size);
+      left %= size;
+    }
+  };
+  tick();
+  setInterval(tick, 1000);
+}

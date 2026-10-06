@@ -19,6 +19,7 @@ from flask.testing import FlaskClient
 from werkzeug.serving import make_server
 
 from scrimmage import db
+from scrimmage import settings as settings_module
 from scrimmage.config import Config
 from scrimmage.services import accounts, bots, builds, queue
 from scrimmage.services.storage import Storage
@@ -26,6 +27,16 @@ from scrimmage.settings import Settings
 from scrimmage.web import create_app
 
 FIXTURE_BOTS = Path(__file__).parent / "fixtures" / "bots"
+
+
+@pytest.fixture(autouse=True)
+def site_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests see the site as open; test_offseason closes it explicitly."""
+    opened = [
+        replace(s, default="") if s.key == "site_opens_on" else s for s in settings_module.SETTINGS
+    ]
+    monkeypatch.setattr(settings_module, "SETTINGS", tuple(opened))
+    monkeypatch.setattr(settings_module, "BY_KEY", {s.key: s for s in opened})
 
 
 @pytest.fixture(autouse=True)
