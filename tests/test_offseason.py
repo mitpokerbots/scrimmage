@@ -20,7 +20,7 @@ def test_everyone_but_admins_sees_the_countdown(
 
     page = client.get("/").get_data(as_text=True)
     assert "data-countdown" in page and "January 4, 2999" in page
-    assert "Announcements" not in page and "Log in" in page  # admins still get in
+    assert "Announcements" not in page and "Staff log in" in page  # admins still get in
     assert client.get("/login").status_code in (200, 302)
     assert client.get("/healthz").status_code == 200
 

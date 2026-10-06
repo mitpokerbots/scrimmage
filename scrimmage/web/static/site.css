@@ -27,7 +27,3 @@ svg.chart { width: 100%; height: auto; }
 svg.chart .line { fill: none; stroke: #2185d0; stroke-width: 2; }
 svg.chart .grid { stroke: rgba(34, 36, 38, 0.15); }
 svg.chart text { font-size: 11px; fill: rgba(0, 0, 0, 0.6); }
-
-/* Off-season countdown. */
-.ui.statistics.countdown { justify-content: center; margin: 3em 0; }
-.countdown-note { margin-top: 2em; }

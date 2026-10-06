@@ -1,17 +1,49 @@
-{% extends "base.html" %}
-{% block content %}
-  {% set left = opening - now_eastern() %}
-  <div class="ui very padded center aligned basic segment">
-    <h1 class="ui huge header">
-      MIT Pokerbots {{ opening.year }}
-      <div class="sub header">The scrimmage server opens on {{ opening.strftime('%B %-d, %Y') }}.</div>
-    </h1>
-    <div class="ui four statistics countdown" data-countdown="{{ opening.timestamp()|int }}">
-      <div class="statistic"><div class="value" data-unit="days">{{ left.days }}</div><div class="label">Days</div></div>
-      <div class="statistic"><div class="value" data-unit="hours">{{ left.seconds // 3600 }}</div><div class="label">Hours</div></div>
-      <div class="statistic"><div class="value" data-unit="minutes">{{ (left.seconds // 60) % 60 }}</div><div class="label">Minutes</div></div>
-      <div class="statistic"><div class="value" data-unit="seconds">{{ left.seconds % 60 }}</div><div class="label">Seconds</div></div>
-    </div>
-    <p class="countdown-note">Until then, learn more at <a href="https://pokerbots.org">pokerbots.org</a>.</p>
-  </div>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MIT Pokerbots {{ opening.year }}</title>
+    <link rel="icon" type="image/png" href="{{ asset('img/favicon.ico') }}">
+    <link rel="stylesheet" href="{{ asset('countdown.css') }}">
+    <script src="{{ asset('app.js') }}" defer></script>
+  </head>
+  <body class="table">
+    {% set left = opening - now_eastern() %}
+    <header class="corner">
+      {% if g.user %}
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button>Log out {{ g.user.kerberos }}</button>
+        </form>
+      {% else %}
+        <a href="{{ url_for('auth.login', next='/') }}">Staff log in</a>
+      {% endif %}
+    </header>
+
+    <main>
+      <img class="logo" src="{{ asset('img/logo_clear.png') }}" alt="">
+      <p class="eyebrow">MIT Pokerbots</p>
+      <h1>{{ opening.year }}</h1>
+      <p class="lede">The scrimmage server opens on <strong>{{ opening.strftime('%B %-d, %Y') }}</strong>.</p>
+
+      <div class="hand" data-countdown="{{ opening.timestamp()|int }}"
+           aria-label="Time until the scrimmage server opens">
+        {% for unit, label, suit, red, value in (
+              ('days', 'Days', '♠', False, left.days),
+              ('hours', 'Hours', '♥', True, left.seconds // 3600),
+              ('minutes', 'Minutes', '♦', True, (left.seconds // 60) % 60),
+              ('seconds', 'Seconds', '♣', False, left.seconds % 60)) %}
+          <div class="card{{ ' red' if red }}">
+            <span class="pip top">{{ suit }}</span>
+            <span class="value" data-unit="{{ unit }}">{{ '%02d'|format(value) }}</span>
+            <span class="label">{{ label }}</span>
+            <span class="pip bottom">{{ suit }}</span>
+          </div>
+        {% endfor %}
+      </div>
+
+      <p class="footnote">Until then, learn more at <a href="https://pokerbots.org">pokerbots.org</a>.</p>
+    </main>
+  </body>
+</html>

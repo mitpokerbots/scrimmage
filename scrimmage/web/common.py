@@ -278,8 +278,18 @@ def offseason_gate() -> str | Response | None:
     return render_template("countdown.html", opening=opening, countdown=True)
 
 
+def asset_url(config: Config) -> Callable[[str], str]:
+    """Static file URLs that change with each deploy, so browsers never use stale ones."""
+
+    def url(filename: str) -> str:
+        return url_for("static", filename=filename, v=config.commit[:12])
+
+    return url
+
+
 def template_globals(config: Config) -> dict[str, Any]:
     return {
+        "asset": asset_url(config),
         "csrf_token": csrf_token,
         "visible_sides": visible_sides,
         "site": config,

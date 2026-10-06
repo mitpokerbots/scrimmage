@@ -33,8 +33,14 @@ if (countdown) {
       return;
     }
     for (const [unit, size] of Object.entries(units)) {
-      countdown.querySelector(`[data-unit="${unit}"]`).textContent = Math.floor(left / size);
+      const cell = countdown.querySelector(`[data-unit="${unit}"]`);
+      const text = String(Math.floor(left / size)).padStart(2, "0");
       left %= size;
+      if (cell.textContent === text) continue;
+      cell.textContent = text;
+      cell.classList.remove("tick");
+      void cell.offsetWidth; // restart the animation
+      cell.classList.add("tick");
     }
   };
   tick();

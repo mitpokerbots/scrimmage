@@ -1,0 +1,172 @@
+/* The off-season countdown: a spotlit card table. Standalone (no Semantic UI). */
+@import url(https://fonts.googleapis.com/css?family=Lato:300,400,700,900&subset=latin);
+
+:root {
+  --felt: #0b3d2e;
+  --felt-dark: #04150f;
+  --gold: #e7c873;
+  --ink: #16181d;
+  --red: #c8102e;
+  --cream: #fbf8f1;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body.table {
+  font-family: Lato, "Helvetica Neue", Arial, sans-serif;
+  color: var(--cream);
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(255, 255, 255, 0.10), transparent 55%),
+    radial-gradient(ellipse at center, var(--felt) 0%, var(--felt-dark) 75%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+/* A faint scatter of suits across the felt. */
+body.table::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='white' fill-opacity='0.04' font-family='Arial' font-size='28'%3E%3Ctext x='10' y='40'%3E%E2%99%A0%3C/text%3E%3Ctext x='90' y='40'%3E%E2%99%A5%3C/text%3E%3Ctext x='50' y='120'%3E%E2%99%A6%3C/text%3E%3Ctext x='130' y='120'%3E%E2%99%A3%3C/text%3E%3C/g%3E%3C/svg%3E");
+  transform: rotate(-12deg);
+  pointer-events: none;
+}
+
+.corner {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.5rem;
+  z-index: 2;
+  font-size: 0.9rem;
+}
+.corner a, .corner button {
+  color: rgba(251, 248, 241, 0.6);
+  text-decoration: none;
+  background: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.corner a:hover, .corner button:hover { color: var(--gold); }
+
+main {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 3rem 1.5rem;
+  max-width: 64rem;
+}
+
+.logo {
+  width: 3.5rem;
+  height: auto;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+}
+
+.eyebrow {
+  margin: 1.25rem 0 0;
+  text-transform: uppercase;
+  letter-spacing: 0.45em;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--gold);
+}
+
+h1 {
+  margin: 0.25rem 0 0;
+  font-weight: 900;
+  font-size: clamp(4.5rem, 14vw, 9rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  background: linear-gradient(180deg, #fff6d8 0%, var(--gold) 55%, #b8913c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 10px 40px rgba(231, 200, 115, 0.15);
+}
+
+.lede {
+  margin: 0.75rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 300;
+  color: rgba(251, 248, 241, 0.8);
+}
+.lede strong { font-weight: 700; color: var(--cream); }
+
+/* The countdown: four playing cards. */
+.hand {
+  display: flex;
+  justify-content: center;
+  gap: clamp(0.75rem, 2.5vw, 1.75rem);
+  margin: 3rem 0 2.5rem;
+  flex-wrap: wrap;
+}
+
+.card {
+  position: relative;
+  width: clamp(6.5rem, 17vw, 9.5rem);
+  aspect-ratio: 5 / 7;
+  border-radius: 0.9rem;
+  background: linear-gradient(160deg, #ffffff 0%, var(--cream) 60%, #efe9db 100%);
+  color: var(--ink);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 18px 35px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s ease;
+}
+.card:nth-child(1) { transform: rotate(-6deg) translateY(6px); }
+.card:nth-child(2) { transform: rotate(-2deg); }
+.card:nth-child(3) { transform: rotate(2deg); }
+.card:nth-child(4) { transform: rotate(6deg) translateY(6px); }
+.card:hover { transform: translateY(-10px) rotate(0deg); }
+.card.red { color: var(--red); }
+
+.card .pip {
+  position: absolute;
+  font-size: clamp(1rem, 2.4vw, 1.4rem);
+  line-height: 1;
+}
+.card .pip.top { top: 0.6rem; left: 0.7rem; }
+.card .pip.bottom { bottom: 0.6rem; right: 0.7rem; transform: rotate(180deg); }
+
+.card .value {
+  font-weight: 900;
+  font-size: clamp(2.6rem, 7vw, 4rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.card .value.tick { animation: tick 0.35s ease-out; }
+.card .label {
+  margin-top: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: clamp(0.6rem, 1.4vw, 0.75rem);
+  font-weight: 700;
+}
+
+@keyframes tick {
+  0% { transform: translateY(-0.25em); opacity: 0.2; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.footnote {
+  font-size: 0.95rem;
+  color: rgba(251, 248, 241, 0.6);
+}
+.footnote a { color: var(--gold); text-decoration: none; border-bottom: 1px solid rgba(231, 200, 115, 0.4); }
+.footnote a:hover { border-bottom-color: var(--gold); }
+
+@media (prefers-reduced-motion: reduce) {
+  .card, .card .value.tick { transition: none; animation: none; }
+}
