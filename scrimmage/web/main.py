@@ -24,7 +24,7 @@ from scrimmage.db import Row, all_rows, one
 from scrimmage.services import accounts, bots, matches, tournaments
 from scrimmage.services.errors import UserError
 from scrimmage.services.storage import LOG_KINDS
-from scrimmage.web import charts, common
+from scrimmage.web import charts, common, gamelog
 from scrimmage.web.common import PAGE_SIZE, login_required, team_required
 
 bp = Blueprint("main", __name__)
@@ -267,6 +267,44 @@ def games() -> str:
     rows = matches.team_games(common.conn(), g.team["id"], PAGE_SIZE + 1, (page - 1) * PAGE_SIZE)
     return render_template(
         "games.html", games=rows[:PAGE_SIZE], page=page, has_next=len(rows) > PAGE_SIZE
+    )
+
+
+@bp.get("/games/<int:game_id>")
+@login_required
+def game_playthrough(game_id: int) -> str:
+    """Hand-by-hand view of the engine log. Same permission as the raw game log."""
+    game = matches.get_game(common.conn(), game_id)
+    if game is None or not can_read_log(game, "game"):
+        abort(404)
+    path = common.state().storage.log_path(game_id, "game")
+    if not path.exists():
+        abort(404, "That game has no log yet. It may still be queued, or the log has expired.")
+    raw = request.args.get("hand", "").strip()
+    number = int(raw) if raw.isdigit() and len(raw) <= 7 and int(raw) >= 1 else None
+    parsed = gamelog.parse_path(path, number)
+    names = {"A": str(game["team_a_name"]), "B": str(game["team_b_name"])}
+    if names["A"] == names["B"]:
+        names["A"] = f"{names['A']} (challenger)"
+        names["B"] = f"{names['B']} (opponent)"
+    me_key = None
+    if g.team is not None:
+        if g.team["id"] == game["team_a_id"]:
+            me_key = "A"
+        elif g.team["id"] == game["team_b_id"]:
+            me_key = "B"
+    hand = parsed.hand
+    return render_template(
+        "playthrough.html",
+        game=game,
+        parsed=parsed,
+        names=names,
+        seats=gamelog.seats_for(
+            hand, names, {"A": str(game["bot_a_name"]), "B": str(game["bot_b_name"])}, me_key
+        )
+        if hand
+        else [],
+        summary=gamelog.hand_summary(hand, names) if hand else "",
     )
 
 

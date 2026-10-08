@@ -6,7 +6,7 @@
     {% if t.is_private %}<span class="ui red label">Private</span>{% endif %}
     <div class="sub header">{{ t.created_at|ago }}</div>
   </h3>
-  <div class="ui stackable divided grid container">
+  <div class="ui stackable divided grid">
     <div class="six wide column">
       <div class="ui two small statistics">
         {{ statistic(t.entrants, 'Participants') }}

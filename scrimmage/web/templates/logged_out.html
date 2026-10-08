@@ -2,7 +2,7 @@
 {% from "_macros.html" import announcements_list, recent_games %}
 {% block content %}
   <h1>MIT Pokerbots Scrimmage Server</h1>
-  <p>Please <a href="{{ url_for('auth.login') }}">log in</a> to continue. You need an MIT Touchstone account.</p>
+  <p class="lede">This is where teams upload a bot, challenge each other, and watch the hands afterwards. <a href="{{ url_for('auth.login') }}">Log in</a> with your MIT Touchstone account. After that, create or join a team, upload a bot, and challenge from the standings.</p>
   {{ announcements_list(announcements) }}
   {{ recent_games(recent) }}
 {% endblock %}

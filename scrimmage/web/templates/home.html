@@ -3,7 +3,9 @@
 {% block content %}
   {% set s = settings() %}
   {% set me = g.team %}
-  <h1>{{ me.name }} - Pokerbots Scrimmage</h1>
+  {% set played = me.wins + me.losses + me.ties %}
+  {% set has_bot = me.current_bot_id %}
+  <h1>{{ me.name }}</h1>
   {% if me.is_disabled %}
     <div class="ui warning message">
       <div class="header">Team disabled.</div>
@@ -21,46 +23,108 @@
       Challenges are disabled against all teams besides reference players.
     </div>
   {% endif %}
-  {% if not me.current_bot_id %}
+  {% if not has_bot %}
     <div class="ui warning message">
       <div class="header">Team not ready!</div>
-      Your team is not ready to play. <a href="{{ url_for('main.team') }}">Go to the team management page</a> to upload and select a bot.
+      Your team is not ready to play. <a href="{{ url_for('main.team') }}#upload">Upload a bot</a> on Manage Team. It becomes the bot that plays once it builds.
     </div>
   {% endif %}
-  <div class="ui stackable grid container">
+
+  {% if not has_bot or played == 0 %}
+    <ol class="howto">
+      <li class="{{ 'is-done' if has_bot else 'is-now' }}">
+        <h3><span class="num">1</span> <a href="{{ url_for('main.team') }}#upload">Upload a bot</a></h3>
+        <p>Zip the folder that contains <code>commands.json</code> and upload it on Manage Team. The build runs once, with no network. When it succeeds, that bot is the one that plays.</p>
+      </li>
+      <li class="{{ 'is-done' if played else ('is-now' if has_bot else '') }}">
+        <h3><span class="num">2</span> Challenge from the standings</h3>
+        <p>
+          {% if not s.flag('challenges_enabled') %}
+            Challenges are turned off right now. When they are on, the button is in the table below.
+          {% elif s.flag('challenges_only_reference') %}
+            Right now only the gold reference rows can be challenged. Press Challenge on one of those.
+          {% elif s.flag('down_challenges_require_accept') %}
+            Press Challenge on another row. A team at or above your rating starts a game immediately, and so does a gold reference row. A team below you has to accept first.
+          {% else %}
+            Press Challenge on another row. The game starts immediately.
+          {% endif %}
+        </p>
+      </li>
+      <li>
+        <h3><span class="num">3</span> <a href="{{ url_for('main.games') }}">Watch the hands</a></h3>
+        <p>Open Your Games after a match. Watch shows the cards and every action. The game log is that same record as text, and your log is only what your program printed.</p>
+      </li>
+    </ol>
+  {% else %}
+    <p class="lede">Press Challenge on the standings to play. When the match finishes, open <a href="{{ url_for('main.games') }}">Your Games</a> and press Watch to see each hand. Ratings start at 1500.</p>
+  {% endif %}
+
+  <div class="ui stackable grid">
     <div class="ten wide column">
       <h2>Team Standings</h2>
-      <table class="ui celled striped table">
-        <thead>
-          <tr><th>Name</th><th>ELO</th><th>Wins</th><th>Losses</th><th>Challenge</th></tr>
-        </thead>
-        <tbody>
-          {% for team in leaderboard %}
-            {% set can = team.id != me.id and team.current_bot_id is not none and me.current_bot_id and not me.is_disabled
-                         and s.flag('challenges_enabled') and (team.is_reference or not s.flag('challenges_only_reference')) %}
-            {% set needs_accept = s.flag('down_challenges_require_accept') and not team.is_reference and me.elo > team.elo %}
-            <tr{% if team.id == me.id %} class="active"{% elif team.is_reference %} class="warning"{% endif %}>
-              <td>{{ team.name }}</td>
-              <td class="center"><div class="ui mini statistic"><div class="value">{{ team.elo|int }}</div></div></td>
-              <td class="center"><div class="ui mini green statistic"><div class="value">{{ team.wins }}</div></div></td>
-              <td class="center"><div class="ui mini red statistic"><div class="value">{{ team.losses }}</div></div></td>
-              <td class="center">
-                <form class="inline" action="{{ url_for('main.challenge') }}" method="POST">
-                  {{ csrf() }}
-                  <input type="hidden" name="team_id" value="{{ team.id }}">
-                  <button class="ui primary icon button {{ '' if can else 'disabled' }}"
-                    title="{{ 'Challenge (they must accept)' if needs_accept else 'Challenge' }}"><i class="rocket icon"></i></button>
-                </form>
-              </td>
+      <div class="table-scroll">
+        <table class="ui celled striped table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th title="Rating before the next game">Rating</th>
+              <th>Wins</th>
+              <th>Losses</th>
+              <th>Challenge</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {% for team in leaderboard %}
+              {% set can = team.id != me.id and team.current_bot_id is not none and has_bot and not me.is_disabled
+                           and s.flag('challenges_enabled') and (team.is_reference or not s.flag('challenges_only_reference')) %}
+              {% set needs_accept = s.flag('down_challenges_require_accept') and not team.is_reference and me.elo > team.elo %}
+              {% if team.id == me.id %}
+                {% set why = 'This is your team' %}
+              {% elif not has_bot %}
+                {% set why = 'Upload a bot on Manage Team before you can challenge' %}
+              {% elif me.is_disabled %}
+                {% set why = 'Your team is disabled' %}
+              {% elif not s.flag('challenges_enabled') %}
+                {% set why = 'Challenges are turned off' %}
+              {% elif team.current_bot_id is none %}
+                {% set why = 'That team has not uploaded a bot yet' %}
+              {% elif s.flag('challenges_only_reference') and not team.is_reference %}
+                {% set why = 'Right now only reference teams can be challenged' %}
+              {% elif needs_accept %}
+                {% set why = 'Challenge (they must accept)' %}
+              {% else %}
+                {% set why = 'Challenge' %}
+              {% endif %}
+              <tr{% if team.id == me.id %} class="active"{% elif team.is_reference %} class="warning"{% endif %}>
+                <td>
+                  {{ team.name }}
+                  {% if team.id == me.id %}<span class="ui mini blue label">You</span>{% endif %}
+                  {% if team.is_reference %}<span class="ui mini yellow label">Reference</span>{% endif %}
+                </td>
+                <td class="center"><div class="ui mini statistic"><div class="value">{{ team.elo|int }}</div></div></td>
+                <td class="center"><div class="ui mini green statistic"><div class="value">{{ team.wins }}</div></div></td>
+                <td class="center"><div class="ui mini red statistic"><div class="value">{{ team.losses }}</div></div></td>
+                <td class="center">
+                  <form class="inline" action="{{ url_for('main.challenge') }}" method="POST">
+                    {{ csrf() }}
+                    <input type="hidden" name="team_id" value="{{ team.id }}">
+                    <button class="ui primary small button{{ '' if can else ' disabled' }}" title="{{ why }}"{{ ' disabled' if not can else '' }}>
+                      <i class="rocket icon"></i> {{ 'Request' if needs_accept and can else 'Challenge' }}
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
       {% if s.flag('challenges_enabled') %}
-        <p>
-          Challenges for people of higher ELO will automatically be accepted.
-          Challenges for reference (yellow) players will also automatically be accepted.
-          {% if s.flag('down_challenges_require_accept') %}Challenges for people of lower ELO must be accepted by them.{% endif %}
+        <p class="legend">
+          <span class="swatch you"></span> You
+          <span class="swatch ref"></span> Reference bot, always accepts.
+          Challenging a team at or above your rating starts a game now.
+          {% if s.flag('down_challenges_require_accept') %}Challenging a team below you asks them to accept, and that request shows up under Outgoing.{% endif %}
+          A game that starts immediately is under <a href="{{ url_for('main.games') }}">Your Games</a>, not in that list.
         </p>
       {% else %}
         <p>Challenges are currently disabled.</p>
@@ -68,6 +132,7 @@
     </div>
     <div class="six wide column">
       <h2>Challenges</h2>
+      <p class="legend">Higher-rated teams who challenged you. Accept to put the game in the queue, or reject it.</p>
       <div class="ui segments">
         {% for r in incoming %}
           <div class="ui segment">
@@ -83,10 +148,11 @@
             </h3>
           </div>
         {% else %}
-          <div class="ui segment">When people of higher ELO challenge you, their requests will appear here.</div>
+          <div class="ui segment">Nothing to accept. When a higher-rated team challenges you, it shows up here.</div>
         {% endfor %}
       </div>
       <h3>Outgoing challenges</h3>
+      <p class="legend">Requests that are still waiting. A challenge that starts immediately never appears here.</p>
       <div class="ui segments">
         {% for r in outgoing %}
           <div class="ui segment">
@@ -101,12 +167,13 @@
             </h3>
           </div>
         {% else %}
-          <div class="ui segment">Your outgoing requests appear here.</div>
+          <div class="ui segment">No requests waiting. If a challenge starts immediately, look under Your Games.</div>
         {% endfor %}
       </div>
     </div>
   </div>
   <br>
   {{ announcements_list(latest, 'Most Recent Announcement') }}
+  <p class="legend">Latest challenges on the server, not only yours. Watch opens a finished game you played in.</p>
   {{ recent_games(recent) }}
 {% endblock %}

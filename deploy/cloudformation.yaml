@@ -438,7 +438,7 @@ Resources:
             git -C /opt/scrimmage cat-file -e "$commit^{commit}" 2>/dev/null \
               || git -C /opt/scrimmage fetch --quiet origin || fail
             git -C /opt/scrimmage checkout --quiet --force "$commit" \
-              && /opt/scrimmage/deploy/install-worker.sh \
+              && bash /opt/scrimmage/deploy/install-worker.sh \
               || fail
 
   WorkerFleet:

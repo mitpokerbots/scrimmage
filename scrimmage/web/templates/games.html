@@ -2,37 +2,64 @@
 {% from "_macros.html" import friendly_status, winner_name, elo, log_link, pager %}
 {% block content %}
   <h1>Your Games</h1>
+  <p class="lede">Every scrimmage your team has played. Watch is the hand-by-hand view. The three logs are the same match in text, for when you want to search or scroll.</p>
+  <ul class="key">
+    <li><strong>Watch</strong> draws the cards and lists every action, one hand at a time.</li>
+    <li><strong>Game log</strong> is that same record as plain text, including both hands once the match is over.</li>
+    <li><strong>Your log</strong> is only what your bot printed. The other team's log stays private.</li>
+    <li><strong>Engine log</strong> is timeouts, disconnects, and illegal moves.</li>
+  </ul>
+  <p class="muted">Ratings are what each team had before the match. Chips are the match total, summed over every hand.</p>
   {{ pager(page, has_next, 'main.games') }}
-  <table class="ui striped celled table">
-    <thead>
-      <tr>
-        <th>Challenger</th><th>C. ELO</th><th>Opponent</th><th>O. ELO</th><th>Creation Time</th>
-        <th>Your bot</th><th>Status</th><th>C. Score</th><th>O. Score</th><th>Winner</th>
-        <th>Game Log</th><th>Player Log</th><th>Engine Log</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for game in games %}
-        {% set mine = 'a' if game.team_a_id == g.team.id else 'b' %}
-        <tr class="{% if game.status in ('queued', 'running') %}disabled{% elif game.status == 'error' %}warning{% elif game.winner == mine %}positive{% elif game.winner == 'tie' %}{% else %}negative{% endif %}">
-          <td>{{ game.team_a_name }}</td>
-          <td>{{ elo(game.elo_a_before) }}</td>
-          <td>{{ game.team_b_name }}</td>
-          <td>{{ elo(game.elo_b_before) }}</td>
-          <td>{{ game.created_at|time }}</td>
-          <td>{{ game.bot_a_name if mine == 'a' else game.bot_b_name }}</td>
-          <td>{{ friendly_status(game) }}</td>
-          <td>{{ game.score_a if game.score_a is not none }}</td>
-          <td>{{ game.score_b if game.score_b is not none }}</td>
-          <td>{{ winner_name(game) }}</td>
-          <td>{{ log_link(game, 'game') }}</td>
-          <td>{{ log_link(game, mine) }}</td>
-          <td>{{ log_link(game, 'engine') }}</td>
+  <div class="table-scroll wide">
+    <table class="ui striped celled table">
+      <thead>
+        <tr>
+          <th>Challenger</th>
+          <th title="Rating before the match">Rating</th>
+          <th>Opponent</th>
+          <th title="Rating before the match">Rating</th>
+          <th>Played</th>
+          <th>Your bot</th>
+          <th>Status</th>
+          <th>Challenger chips</th>
+          <th>Opponent chips</th>
+          <th>Winner</th>
+          <th>Review</th>
         </tr>
-      {% else %}
-        <tr><td colspan="13">Once you have played some games, they will show up here.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <p>ELO numbers are pre-match elos. The engine log shows connection and timeout problems.</p>
+      </thead>
+      <tbody>
+        {% for game in games %}
+          {% set mine = 'a' if game.team_a_id == g.team.id else 'b' %}
+          {% set ready = game.status in ('done', 'error') %}
+          <tr class="{% if game.status in ('queued', 'running') %}disabled{% elif game.status == 'error' %}warning{% elif game.winner == mine %}positive{% elif game.winner == 'tie' %}{% else %}negative{% endif %}">
+            <td>{{ game.team_a_name }}</td>
+            <td>{{ elo(game.elo_a_before) }}</td>
+            <td>{{ game.team_b_name }}</td>
+            <td>{{ elo(game.elo_b_before) }}</td>
+            <td>{{ game.created_at|time }}</td>
+            <td>{{ game.bot_a_name if mine == 'a' else game.bot_b_name }}</td>
+            <td>{{ friendly_status(game) }}</td>
+            <td>{{ game.score_a if game.score_a is not none }}</td>
+            <td>{{ game.score_b if game.score_b is not none }}</td>
+            <td>{{ winner_name(game) }}</td>
+            <td>
+              {% if ready %}
+                <a class="ui mini primary button" href="{{ url_for('main.game_playthrough', game_id=game.id) }}">Watch</a>
+                <div class="log-links">
+                  {{ log_link(game, 'game', 'Game log') }} ·
+                  {{ log_link(game, mine, 'Your log') }} ·
+                  {{ log_link(game, 'engine', 'Engine log') }}
+                </div>
+              {% else %}
+                Not available yet
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="11">No games yet. Go to <a href="{{ url_for('main.index') }}">Home</a> and challenge someone. The match will show up here, and Watch appears when it finishes.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 {% endblock %}

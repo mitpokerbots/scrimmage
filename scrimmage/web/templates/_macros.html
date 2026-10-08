@@ -46,21 +46,36 @@
 {% macro recent_games(games) -%}
 <div class="container">
   <h2>Recent Games</h2>
-  <table class="ui celled condensed table">
-    <thead><tr><th>Challenger</th><th>Opponent</th><th>Time</th><th>Status</th></tr></thead>
-    <tbody>
-      {% for game in games %}
-        <tr{% if game.status == 'error' %} class="disabled"{% endif %}>
-          <td{% if game.winner == 'a' %} class="positive"{% elif game.winner == 'b' %} class="negative"{% endif %}>{{ game.team_a_name }}</td>
-          <td{% if game.winner == 'b' %} class="positive"{% elif game.winner == 'a' %} class="negative"{% endif %}>{{ game.team_b_name }}</td>
-          <td>{{ game.created_at|ago }}</td>
-          <td>{{ friendly_status(game) }}</td>
+  <div class="table-scroll">
+    <table class="ui celled condensed table">
+      <thead>
+        <tr>
+          <th>Challenger</th><th>Opponent</th><th>Time</th><th>Status</th>
+          {% if g.user %}<th>Watch</th>{% endif %}
         </tr>
-      {% else %}
-        <tr><td colspan="4">No games have been played yet! Check back in soon</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for game in games %}
+          {% set mine = g.team and (g.team.id == game.team_a_id or g.team.id == game.team_b_id) %}
+          <tr{% if game.status == 'error' %} class="disabled"{% endif %}>
+            <td{% if game.winner == 'a' %} class="positive"{% elif game.winner == 'b' %} class="negative"{% endif %}>{{ game.team_a_name }}</td>
+            <td{% if game.winner == 'b' %} class="positive"{% elif game.winner == 'a' %} class="negative"{% endif %}>{{ game.team_b_name }}</td>
+            <td>{{ game.created_at|ago }}</td>
+            <td>{{ friendly_status(game) }}</td>
+            {% if g.user %}
+              <td>
+                {% if game.status in ('done', 'error') and (g.is_admin or mine) %}
+                  <a href="{{ url_for('main.game_playthrough', game_id=game.id) }}">Watch</a>
+                {% else %}—{% endif %}
+              </td>
+            {% endif %}
+          </tr>
+        {% else %}
+          <tr><td colspan="{{ 5 if g.user else 4 }}">No games have been played yet! Check back in soon</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 <br>
 {%- endmacro %}

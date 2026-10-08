@@ -15,7 +15,10 @@ PAD_LEFT, PAD_RIGHT, PAD_TOP, PAD_BOTTOM = 44, 12, 12, 24
 def rating_chart(points: list[tuple[int, float]], start: float = 1500.0) -> Markup:
     """Rating after each game, plotted against game number."""
     if not points:
-        return Markup('<p class="muted">No rated games yet.</p>')
+        return Markup(
+            '<p class="muted">No rated games yet. '
+            "Challenge someone, and the line shows up after the match.</p>"
+        )
     values = [start] + [value for _, value in points]
     low, high = min(values), max(values)
     if high - low < 50:

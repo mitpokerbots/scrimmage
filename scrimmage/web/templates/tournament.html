@@ -4,6 +4,7 @@
   {% set p = progress %}
   <h1>{{ tournament.title }}
     {% if tournament.is_private %}<span class="ui red label">Private</span>{% endif %}</h1>
+  <p class="lede">Standings here are for this tournament only.{% if g.team %} Your team is highlighted.{% endif %}</p>
   <p>{{ tournament.games_per_pair }} game{{ 's' if tournament.games_per_pair != 1 }} per pair · started {{ tournament.created_at|time }}
     {% if tournament.finished_at %} · finished {{ tournament.finished_at|time }}{% endif %}</p>
   {% if p.total %}

@@ -40,6 +40,7 @@ check "shibd -t accepts MIT's legacy config" "shibd -t >/dev/null 2>&1"
 check "SP cert CN is the domain" "openssl x509 -in /etc/shibboleth/sp-signing-cert.pem -noout -subject | grep -q scrimmage.example.org"
 check "SP keys kept on the data volume" "[ -s /srv/shibboleth/sp-encrypt-key.pem ]"
 check "deployed commit recorded" "[ \"\$(cat /var/lib/scrimmage-deploy/deployed)\" = \"\$(git -C /opt/scrimmage rev-parse HEAD)\" ]"
+check "worker installer is executable" "[ -x /opt/scrimmage/deploy/install-worker.sh ]"
 
 step "redeploy (what update.sh and autodeploy run)"
 redeploy_start=$(date +%s)

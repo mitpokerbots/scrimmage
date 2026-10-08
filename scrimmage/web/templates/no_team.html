@@ -2,6 +2,7 @@
 {% from "_macros.html" import csrf, announcements_list %}
 {% block content %}
   <h1>Welcome to the MIT Pokerbots Scrimmage Server!</h1>
+  <p class="lede">You're logged in, but you aren't on a team yet. Create one if you are the team leader or playing alone. Otherwise request to join a team; they have to accept before you can upload a bot or challenge.</p>
 
   {% if not join_request %}
   <div class="ui placeholder segment">

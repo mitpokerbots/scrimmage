@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% from "_macros.html" import winner_name, elo %}
+
+{% macro playing_card(card, discarded=false) -%}
+  {% if card.suit %}
+    <span class="pcard{{ ' red' if card.red else '' }}{{ ' discarded' if discarded else '' }}" role="img" aria-label="{{ card.rank }} of {{ card.suit_name }}{{ ', discarded' if discarded else '' }}" title="{{ card.raw }}">
+      <span aria-hidden="true">{{ card.rank }}</span><span class="suit" aria-hidden="true">{{ card.suit }}</span>
+    </span>
+  {% else %}
+    <span class="pcard unknown" title="{{ card.raw }}">{{ card.raw }}</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro cards(hand_cards) -%}
+  {% for card in hand_cards %}{{ playing_card(card) }}{% endfor %}
+{%- endmacro %}
+
+{% macro describe(ev, names) -%}
+  {% set who = names.get(ev.actor, ev.actor) %}
+  {% if ev.kind == 'note' %}<span class="muted">{{ ev.detail }}</span>
+  {% elif ev.kind == 'blind' %}{{ who }} posts a blind of {{ ev.amount }}
+  {% elif ev.kind == 'deal' %}{{ who }} is dealt {{ cards(ev.cards) }}
+  {% elif ev.kind == 'fold' %}{{ who }} folds
+  {% elif ev.kind == 'call' %}{{ who }} calls
+  {% elif ev.kind == 'check' %}{{ who }} checks
+  {% elif ev.kind == 'bet' %}{{ who }} bets {{ ev.amount }}
+  {% elif ev.kind == 'raise' %}{{ who }} raises to {{ ev.amount }}
+  {% elif ev.kind == 'discard' %}{{ who }} discards {{ cards(ev.cards) }}
+  {% elif ev.kind == 'show' %}{{ who }} shows {{ cards(ev.cards) }}
+  {% elif ev.kind == 'award' and ev.amount > 0 %}{{ who }} wins {{ ev.amount }} chips
+  {% elif ev.kind == 'award' and ev.amount < 0 %}{{ who }} loses {{ -ev.amount }} chips
+  {% elif ev.kind == 'award' %}{{ who }} splits the pot
+  {% else %}{{ ev.detail or ev.kind }}
+  {% endif %}
+{%- endmacro %}
+
+{% block title %}{{ names['A'] }} vs {{ names['B'] }} · Pokerbots Scrimmage{% endblock %}
+{% block content %}
+  <h1>{{ names['A'] }} vs {{ names['B'] }}</h1>
+  <p class="lede">
+    {% if game.score_a is not none %}
+      Official result: {{ names['A'] }} {{ game.score_a }}, {{ names['B'] }} {{ game.score_b }}.
+      Winner: {{ winner_name(game) }}.
+    {% elif game.status == 'error' %}
+      This match did not finish cleanly. Below is whatever the engine managed to log.
+    {% else %}
+      No chip result was recorded for this match.
+    {% endif %}
+    {% if game.elo_a_after is not none %}
+      {{ names['A'] }} went from {{ elo(game.elo_a_before) }} to {{ elo(game.elo_a_after) }},
+      {{ names['B'] }} from {{ elo(game.elo_b_before) }} to {{ elo(game.elo_b_after) }}.
+    {% endif %}
+  </p>
+  <p class="log-links">
+    <a href="{{ url_for('main.game_log', game_id=game.id, kind='game') }}">Raw game log</a>
+    · <a href="{{ url_for('main.game_log', game_id=game.id, kind='engine') }}">Engine log</a>
+    {% for side in visible_sides(game) %}
+      · <a href="{{ url_for('main.game_log', game_id=game.id, kind=side) }}">{{ names['A' if side == 'a' else 'B'] }} bot log</a>
+    {% endfor %}
+    {% if g.team %} · <a href="{{ url_for('main.games') }}">All your games</a>{% endif %}
+    {% if g.is_admin %} · <a href="{{ url_for('admin.game_detail', game_id=game.id) }}">Admin details</a>{% endif %}
+  </p>
+  {% if game.error %}
+    <div class="ui warning message"><pre class="error">{{ game.error }}</pre></div>
+  {% endif %}
+
+  {% if parsed.error %}
+    <div class="ui warning message">{{ parsed.error }} The <a href="{{ url_for('main.game_log', game_id=game.id, kind='game') }}">raw game log</a> is still available.</div>
+  {% elif parsed.hand is none %}
+    <div class="ui warning message">
+      This file does not look like an engine game log, so there is nothing to step through.
+      Open the <a href="{{ url_for('main.game_log', game_id=game.id, kind='game') }}">raw game log</a> instead.
+    </div>
+    {% if parsed.preamble %}
+      <pre class="error">{{ parsed.preamble|join('\n') }}</pre>
+    {% endif %}
+  {% else %}
+    {% set hand = parsed.hand %}
+    {% if parsed.missing %}
+      <div class="ui info message">That hand number is not in the log. Showing hand {{ hand.number }}.</div>
+    {% endif %}
+    <nav class="hand-nav" aria-label="Hands">
+      {% if parsed.prev_number is not none %}
+        <a class="ui mini basic button" href="{{ url_for('main.game_playthrough', game_id=game.id, hand=parsed.prev_number) }}">Previous hand</a>
+      {% else %}
+        <span class="ui mini basic disabled button">Previous hand</span>
+      {% endif %}
+      <form class="hand-jump" method="get" action="{{ url_for('main.game_playthrough', game_id=game.id) }}">
+        <label for="hand">Hand</label>
+        <input id="hand" name="hand" value="{{ hand.number }}" inputmode="numeric" autocomplete="off">
+        <span>of {{ parsed.count }}</span>
+        <button class="ui mini basic button" type="submit">Go</button>
+      </form>
+      {% if parsed.next_number is not none %}
+        <a class="ui mini basic button" href="{{ url_for('main.game_playthrough', game_id=game.id, hand=parsed.next_number) }}">Next hand</a>
+      {% else %}
+        <span class="ui mini basic disabled button">Next hand</span>
+      {% endif %}
+    </nav>
+
+    <div data-replay>
+      <div class="seats">
+        {% for seat in seats %}
+          <section class="seat{{ ' mine' if seat.mine else '' }}">
+            <div class="who">{{ seat.name }}{% if seat.mine %} <span class="you-tag">Your bot</span>{% endif %}</div>
+            {% if seat.role %}<div class="role">{{ seat.role }}</div>{% endif %}
+            {% if seat.bot %}<p class="bot">Playing {{ seat.bot }}</p>{% endif %}
+            <div class="cards">
+              {% for card in seat.cards %}
+                {{ playing_card(card, card.raw in seat.discarded) }}
+              {% else %}
+                <span class="bank">No hole cards in the log.</span>
+              {% endfor %}
+            </div>
+            {% if seat.bank is not none %}
+              <p class="bank">Match score before this hand: {{ seat.bank }}</p>
+            {% endif %}
+          </section>
+        {% endfor %}
+      </div>
+      <div class="hand-result">
+        <strong>Hand {{ hand.number }}.</strong> {{ summary }}
+        <p class="muted">Both hands are face up because the match is finished. While it was played, each bot saw only its own cards. A discarded card is crossed out.</p>
+      </div>
+      <div class="replay-controls" data-replay-controls hidden>
+        <button type="button" class="ui mini button" data-replay-action="start">Replay from the deal</button>
+        <button type="button" class="ui mini basic button" data-replay-action="prev">Back</button>
+        <button type="button" class="ui mini basic button" data-replay-action="next">Next</button>
+        <button type="button" class="ui mini basic button" data-replay-action="all">Show the whole hand</button>
+        <span data-replay-status></span>
+      </div>
+      <p class="muted">Actions are in the order the engine logged them. A "Current stacks" line is the chips each seat still had in the hand, not the match score.</p>
+      <ol class="beats">
+        {% for street in hand.streets %}
+          <li class="beat street" data-beat>
+            <h3>{{ street.name }}</h3>
+            {% if street.board %}<div class="cards">{{ cards(street.board) }}</div>{% endif %}
+          </li>
+          {% for ev in street.events %}
+            <li class="beat" data-beat>{{ describe(ev, names) }}</li>
+          {% endfor %}
+        {% endfor %}
+      </ol>
+    </div>
+  {% endif %}
+{% endblock %}

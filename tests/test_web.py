@@ -137,6 +137,65 @@ def test_challenge_and_logs(
     assert alice.get("/games/1/logs/passwd").status_code == 404
 
 
+def test_playthrough_is_the_game_log(
+    make_client, conn: sqlite3.Connection, storage: Storage, python_bot_zip: bytes
+) -> None:  # type: ignore[no-untyped-def]
+    alice = setup_team(make_client, "alice", "Aces", python_bot_zip)
+    bob = setup_team(make_client, "bob", "Kings", python_bot_zip)
+    carol = setup_team(make_client, "carol", "Queens", python_bot_zip)
+    home = alice.get("/").get_data(as_text=True)
+    assert "Upload a bot" in home and "Watch the hands" in home and 'title="Challenge"' in home
+
+    alice.post("/challenge", {"team_id": 2})
+    game = claim_one(conn)
+    assert game is not None
+    storage.write_log(game["id"], "game", gzip.compress(_HAND.encode()))
+    for kind in ("a", "b", "engine"):
+        storage.write_log(game["id"], kind, gzip.compress(b"log"))
+    queue.record_result(conn, Settings(conn), game["id"], queue.Result(4, -4))
+
+    games_page = alice.get("/games").get_data(as_text=True)
+    assert "Watch" in games_page and "Your log" in games_page
+    page = alice.get(f"/games/{game['id']}").get_data(as_text=True)
+    assert "Aces" in page and "Kings" in page and 'title="Ah"' in page
+    assert "Small blind" in page and "won 4 chips" in page
+    assert f"/games/{game['id']}/logs/a" in page
+    assert f"/games/{game['id']}/logs/b" not in page
+
+    bob_page = bob.get(f"/games/{game['id']}?hand=2").get_data(as_text=True)
+    assert "2c" in bob_page and f"/games/{game['id']}/logs/b" in bob_page
+    assert carol.get(f"/games/{game['id']}").status_code == 404
+    missing = alice.get(f"/games/{game['id']}?hand=9").get_data(as_text=True)
+    assert "not in the log" in missing and 'title="Ah"' in missing
+
+    storage.write_log(game["id"], "game", gzip.compress(b"not a poker log"))
+    plain = alice.get(f"/games/{game['id']}")
+    text = plain.get_data(as_text=True)
+    assert plain.status_code == 200 and "does not look like an engine game log" in text
+
+
+_HAND = """\
+Round #1, A (0), B (0)
+A posts the blind of 1
+B posts the blind of 2
+A dealt [Ah Kd 3c]
+B dealt [Qs Jh 2d]
+A calls
+B folds
+A awarded 4
+B awarded -4
+
+Round #2, B (-4), A (4)
+B posts the blind of 1
+A posts the blind of 2
+B dealt [2c 2d 2h]
+A dealt [As Ks Qs]
+B folds
+B awarded -1
+A awarded 1
+"""
+
+
 def test_downward_challenge_accept_flow(
     make_client, conn: sqlite3.Connection, python_bot_zip: bytes
 ) -> None:  # type: ignore[no-untyped-def]

@@ -46,3 +46,34 @@ if (countdown) {
   tick();
   setInterval(tick, 1000);
 }
+
+// Step through a finished hand. Without this script the whole hand stays visible.
+const replay = document.querySelector("[data-replay]");
+if (replay) {
+  const beats = [...replay.querySelectorAll("[data-beat]")];
+  const controls = replay.querySelector("[data-replay-controls]");
+  const status = replay.querySelector("[data-replay-status]");
+  if (beats.length > 0 && controls instanceof HTMLElement) {
+    controls.hidden = false;
+    let cursor = beats.length;
+    const paint = () => {
+      const live = cursor < beats.length;
+      replay.classList.toggle("is-replaying", live);
+      beats.forEach((beat, index) => beat.classList.toggle("is-future", index >= cursor));
+      if (status) status.textContent = live ? `Step ${cursor} of ${beats.length}` : "";
+    };
+    controls.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const action = target.closest("[data-replay-action]");
+      if (!(action instanceof HTMLElement)) return;
+      const name = action.dataset.replayAction;
+      if (name === "start") cursor = 1;
+      else if (name === "prev") cursor = Math.max(1, cursor - 1);
+      else if (name === "next") cursor = Math.min(beats.length, cursor + 1);
+      else if (name === "all") cursor = beats.length;
+      else return;
+      paint();
+    });
+  }
+}
