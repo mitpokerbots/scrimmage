@@ -65,10 +65,7 @@ def test_first_hand_parses_cards_actions_and_positions() -> None:
     assert dict(hand.roles) == {"A": "Small blind", "B": "Big blind"}
     assert hand.awards == (("A", 4), ("B", -4))
     notes = [
-        event.detail
-        for street in hand.streets
-        for event in street.events
-        if event.kind == "note"
+        event.detail for street in hand.streets for event in street.events if event.kind == "note"
     ]
     assert "A ran out of time" in notes
     assert "Current stacks: 398, 398" in notes
