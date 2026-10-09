@@ -14,6 +14,7 @@
     <li><a href="{{ url_for('admin.games') }}">View all games</a></li>
   </ul>
 
+  <div data-live="queue">
   <h2 class="ui dividing header">Queue</h2>
   <div class="ui five small statistics">
     {{ statistic(counts.queued, 'Queued') }}
@@ -32,9 +33,10 @@
       in the CloudFormation stack (it grows without downtime), or delete old data.
     </div>
   {% endif %}
+  </div>
 
   <h2 class="ui dividing header">Game capacity</h2>
-  <p><strong>{{ games_running }}</strong> games running on <strong>{{ cores_busy }} of {{ cores_online }}</strong> worker cores.
+  <p data-live="running"><strong>{{ games_running }}</strong> games running on <strong>{{ cores_busy }} of {{ cores_online }}</strong> worker cores.
     The main server contributes {{ local_cores }} cores; games with more cores than that run on worker machines.</p>
   <form class="ui form segment" method="POST" action="{{ url_for('admin.set_capacity') }}">
     {{ csrf() }}
@@ -72,6 +74,7 @@
       <a href="{{ url_for('admin.tournament_list') }}#cost">Estimate a tournament's cost</a>.</p>
   </div>
 
+  <div data-live="fleet">
   {% if fleet_error %}
     <div class="ui negative message">Worker machines: {{ fleet_error }}</div>
   {% elif fleet_status %}
@@ -130,4 +133,5 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 {% endblock %}

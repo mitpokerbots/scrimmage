@@ -10,6 +10,7 @@
     <li><strong>Engine log</strong> is timeouts, disconnects, and illegal moves.</li>
   </ul>
   <p class="muted">Ratings are what each team had before the match. Chips are the match total, summed over every hand.</p>
+  <div data-live="games">
   {{ pager(page, has_next, 'main.games') }}
   <div class="table-scroll wide">
     <table class="ui striped celled table">
@@ -61,5 +62,6 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
   </div>
 {% endblock %}

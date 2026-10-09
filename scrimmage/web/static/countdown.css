@@ -2,12 +2,12 @@
 @import url(https://fonts.googleapis.com/css?family=Lato:300,400,700,900&subset=latin);
 
 :root {
-  --felt: #0b3d2e;
-  --felt-dark: #04150f;
-  --gold: #e7c873;
-  --ink: #16181d;
+  --felt: #111111;
+  --felt-dark: #000000;
+  --gold: #016699;
+  --ink: #111111;
   --red: #c8102e;
-  --cream: #fbf8f1;
+  --cream: #ffffff;
 }
 
 * { box-sizing: border-box; }
@@ -83,7 +83,7 @@ h1 {
   font-size: clamp(4.5rem, 14vw, 9rem);
   line-height: 1;
   letter-spacing: -0.02em;
-  background: linear-gradient(180deg, #fff6d8 0%, var(--gold) 55%, #b8913c 100%);
+  background: linear-gradient(180deg, #7ec4e0 0%, var(--gold) 55%, #014e73 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -112,7 +112,7 @@ h1 {
   width: clamp(6.5rem, 17vw, 9.5rem);
   aspect-ratio: 5 / 7;
   border-radius: 0.9rem;
-  background: linear-gradient(160deg, #ffffff 0%, var(--cream) 60%, #efe9db 100%);
+  background: linear-gradient(160deg, #ffffff 0%, #f7f8fa 70%, #e7eef2 100%);
   color: var(--ink);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.8) inset,
@@ -164,7 +164,7 @@ h1 {
   font-size: 0.95rem;
   color: rgba(251, 248, 241, 0.6);
 }
-.footnote a { color: var(--gold); text-decoration: none; border-bottom: 1px solid rgba(231, 200, 115, 0.4); }
+.footnote a { color: var(--gold); text-decoration: none; border-bottom: 1px solid rgba(1, 102, 153, 0.45); }
 .footnote a:hover { border-bottom-color: var(--gold); }
 
 @media (prefers-reduced-motion: reduce) {

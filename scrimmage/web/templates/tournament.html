@@ -7,6 +7,7 @@
   <p class="lede">Standings here are for this tournament only.{% if g.team %} Your team is highlighted.{% endif %}</p>
   <p>{{ tournament.games_per_pair }} game{{ 's' if tournament.games_per_pair != 1 }} per pair · started {{ tournament.created_at|time }}
     {% if tournament.finished_at %} · finished {{ tournament.finished_at|time }}{% endif %}</p>
+  <div data-live="progress">
   {% if p.total %}
     <progress class="tournament" value="{{ p.done + p.error }}" max="{{ p.total }}"></progress>
     <div class="ui four small statistics">
@@ -16,6 +17,7 @@
       {{ statistic(p.error, 'Errored', 'red') }}
     </div>
   {% endif %}
+  </div>
 
   {% if g.is_admin %}
     <h2 class="ui dividing header">Admin</h2>
@@ -34,6 +36,7 @@
     </div>
   {% endif %}
 
+  <div data-live="standings">
   <h2>Standings</h2>
   <table class="ui celled striped table">
     <thead>
@@ -59,4 +62,5 @@
   {% if tournament.status != 'done' %}
     <p>Ratings are provisional until every game has been played; they are refitted from all finished games every minute.</p>
   {% endif %}
+  </div>
 {% endblock %}

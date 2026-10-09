@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -55,8 +56,16 @@ class AutoScalingFleet:
             client = boto3.client("autoscaling", region_name=region or None)
         self.client = client
         self.group = group
+        self._cache: tuple[float, FleetStatus] | None = None
 
     def status(self) -> FleetStatus:
+        if self._cache is not None and time.monotonic() - self._cache[0] < 5:
+            return self._cache[1]
+        result = self._fetch_status()
+        self._cache = (time.monotonic(), result)
+        return result
+
+    def _fetch_status(self) -> FleetStatus:
         groups = self.client.describe_auto_scaling_groups(AutoScalingGroupNames=[self.group])
         group = groups["AutoScalingGroups"][0]
         in_service = starting = 0
@@ -83,6 +92,7 @@ class AutoScalingFleet:
         )
 
     def set_desired(self, cores: int) -> None:
+        self._cache = None
         self.client.set_desired_capacity(
             AutoScalingGroupName=self.group, DesiredCapacity=cores, HonorCooldown=False
         )

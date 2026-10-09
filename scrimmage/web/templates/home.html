@@ -42,9 +42,9 @@
           {% if not s.flag('challenges_enabled') %}
             Challenges are turned off right now. When they are on, the button is in the table below.
           {% elif s.flag('challenges_only_reference') %}
-            Right now only the gold reference rows can be challenged. Press Challenge on one of those.
+            Right now only reference teams can be challenged. Press Challenge on one of those.
           {% elif s.flag('down_challenges_require_accept') %}
-            Press Challenge on another row. A team at or above your rating starts a game immediately, and so does a gold reference row. A team below you has to accept first.
+            Press Challenge on another row. A team at or above your rating starts a game immediately, and so does a reference team. A team below you has to accept first.
           {% else %}
             Press Challenge on another row. The game starts immediately.
           {% endif %}
@@ -60,7 +60,7 @@
   {% endif %}
 
   <div class="ui stackable grid">
-    <div class="ten wide column">
+    <div class="ten wide column" data-live="standings">
       <h2>Team Standings</h2>
       <div class="table-scroll">
         <table class="ui celled striped table">
@@ -99,7 +99,7 @@
                 <td>
                   {{ team.name }}
                   {% if team.id == me.id %}<span class="ui mini blue label">You</span>{% endif %}
-                  {% if team.is_reference %}<span class="ui mini yellow label">Reference</span>{% endif %}
+                  {% if team.is_reference %}<span class="ui mini basic label">Reference</span>{% endif %}
                 </td>
                 <td class="center"><div class="ui mini statistic"><div class="value">{{ team.elo|int }}</div></div></td>
                 <td class="center"><div class="ui mini green statistic"><div class="value">{{ team.wins }}</div></div></td>
@@ -120,8 +120,7 @@
       </div>
       {% if s.flag('challenges_enabled') %}
         <p class="legend">
-          <span class="swatch you"></span> You
-          <span class="swatch ref"></span> Reference bot, always accepts.
+          The highlighted row is your team. A team marked Reference always accepts.
           Challenging a team at or above your rating starts a game now.
           {% if s.flag('down_challenges_require_accept') %}Challenging a team below you asks them to accept, and that request shows up under Outgoing.{% endif %}
           A game that starts immediately is under <a href="{{ url_for('main.games') }}">Your Games</a>, not in that list.
@@ -130,7 +129,7 @@
         <p>Challenges are currently disabled.</p>
       {% endif %}
     </div>
-    <div class="six wide column">
+    <div class="six wide column" data-live="challenges">
       <h2>Challenges</h2>
       <p class="legend">Higher-rated teams who challenged you. Accept to put the game in the queue, or reject it.</p>
       <div class="ui segments">
@@ -174,6 +173,8 @@
   </div>
   <br>
   {{ announcements_list(latest, 'Most Recent Announcement') }}
+  <div data-live="recent">
   <p class="legend">Latest challenges on the server, not only yours. Watch opens a finished game you played in.</p>
   {{ recent_games(recent) }}
+  </div>
 {% endblock %}

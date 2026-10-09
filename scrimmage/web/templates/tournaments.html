@@ -2,9 +2,11 @@
 {% block content %}
   <h1>Tournaments</h1>
   <p class="lede">These are staff-run events. A tournament rating is not the scrimmage rating on the home page.</p>
+  <div data-live="list">
   {% for t in tournaments %}
     {% with link = url_for('main.tournament_detail', tournament_id=t.id) %}{% include "_tournament.html" %}{% endwith %}
   {% else %}
     <p>There are no tournaments to show.</p>
   {% endfor %}
+  </div>
 {% endblock %}

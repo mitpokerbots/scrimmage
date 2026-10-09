@@ -5,46 +5,35 @@
   <p class="lede">You're logged in, but you aren't on a team yet. Create one if you are the team leader or playing alone. Otherwise request to join a team; they have to accept before you can upload a bot or challenge.</p>
 
   {% if not join_request %}
-  <div class="ui placeholder segment">
-    <div class="ui two column stackable center aligned grid">
-      <div class="ui vertical divider">Or</div>
-      <div class="middle aligned row">
-        <div class="column">
-          <div class="ui icon header">
-            <i class="group icon"></i>
-            Join a team
-            <div class="sub header">For most participants.</div>
-          </div>
-          <form class="ui form" action="{{ url_for('main.request_join') }}" method="POST">
-            {{ csrf() }}
-            <div class="ui action input">
-              <select class="ui compact selection dropdown" name="team_id" {{ 'disabled' if not teams }}>
-                {% for team in teams %}
-                  <option value="{{ team.id }}">{{ team.name }} ({{ team.size }}/{{ settings().number('maximum_team_size') }})</option>
-                {% else %}
-                  <option>No teams available to join</option>
-                {% endfor %}
-              </select>
-              <button class="ui basic primary button {{ 'disabled' if not teams }}">Request</button>
-            </div>
-          </form>
-        </div>
-        <div class="column">
-          <div class="ui icon header">
-            <i class="plus circle icon"></i>
-            Create a team
-            <div class="sub header">For team leaders and solo competitors.</div>
-          </div>
-          <form class="ui form" action="{{ url_for('main.create_team') }}" method="POST">
-            {{ csrf() }}
-            <div class="ui action input">
-              <input type="text" placeholder="Team name" name="name" required maxlength="40">
-              <button class="ui basic primary button">Create</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+  <div class="split-choice">
+    <section>
+      <h2>Join a team</h2>
+      <p class="muted">For most participants.</p>
+      <form action="{{ url_for('main.request_join') }}" method="POST">
+        {{ csrf() }}
+        <label>Team
+          <select name="team_id" {{ 'disabled' if not teams }}>
+            {% for team in teams %}
+              <option value="{{ team.id }}">{{ team.name }} ({{ team.size }}/{{ settings().number('maximum_team_size') }})</option>
+            {% else %}
+              <option>No teams available to join</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button class="ui primary button" type="submit" {{ 'disabled' if not teams }}>Request</button>
+      </form>
+    </section>
+    <section>
+      <h2>Create a team</h2>
+      <p class="muted">For team leaders and solo competitors.</p>
+      <form action="{{ url_for('main.create_team') }}" method="POST">
+        {{ csrf() }}
+        <label>Name
+          <input type="text" placeholder="Team name" name="name" required maxlength="40">
+        </label>
+        <button class="ui primary button" type="submit">Create</button>
+      </form>
+    </section>
   </div>
   {% else %}
   <div class="ui placeholder segment">

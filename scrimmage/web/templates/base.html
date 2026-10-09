@@ -12,43 +12,45 @@
 
   <body>
     {% set endpoint = request.endpoint or '' %}
-    <div class="ui inverted menu">
-      <div class="ui container">
-        <a href="{{ url_for('main.index') }}" class="header item">
-          <img class="logo" src="{{ asset('img/logo_clear.png') }}" alt="">
-          Pokerbots Scrimmage
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a href="{{ url_for('main.index') }}" class="brand">
+          <img src="{{ asset('img/logo_clear.png') }}" alt="">
+          <span>Pokerbots Scrimmage</span>
         </a>
         {% if not countdown %}
-        <a href="{{ url_for('main.index') }}" class="{{ 'active' if endpoint == 'main.index' }} item">Home</a>
+        <nav class="topnav">
+          <a href="{{ url_for('main.index') }}" class="{{ 'is-on' if endpoint == 'main.index' }}">Home</a>
+          {% if g.user %}
+            <a href="{{ url_for('main.announcements') }}" class="{{ 'is-on' if endpoint == 'main.announcements' }}">Announcements</a>
+          {% endif %}
+          {% if g.team %}
+            <a href="{{ url_for('main.team') }}" class="{{ 'is-on' if endpoint == 'main.team' }}">Manage Team</a>
+            <a href="{{ url_for('main.games') }}" class="{{ 'is-on' if endpoint == 'main.games' }}">Your Games</a>
+          {% endif %}
+          {% if g.team or g.is_admin %}
+            <a href="{{ url_for('main.tournament_list') }}" class="{{ 'is-on' if endpoint.startswith('main.tournament') }}">Tournaments</a>
+          {% endif %}
+          {% if g.team %}
+            <a href="{{ url_for('main.charts_page') }}" class="{{ 'is-on' if endpoint == 'main.charts_page' }}">Charts</a>
+          {% endif %}
+          <a href="https://playground.pokerbots.org">Playground</a>
+          {% if g.is_admin %}
+            <a href="{{ url_for('admin.dashboard') }}" class="{{ 'is-on' if endpoint.startswith('admin.') }}">Admin</a>
+            <a href="{{ url_for('sponsor.index') }}" class="{{ 'is-on' if endpoint.startswith('sponsor.') }}">Sponsor</a>
+          {% endif %}
+        </nav>
+        {% endif %}
         {% if g.user %}
-          <a href="{{ url_for('main.announcements') }}" class="{{ 'active' if endpoint == 'main.announcements' }} item">Announcements</a>
-        {% endif %}
-        {% if g.team %}
-          <a href="{{ url_for('main.team') }}" class="{{ 'active' if endpoint == 'main.team' }} item">Manage Team</a>
-          <a href="{{ url_for('main.games') }}" class="{{ 'active' if endpoint == 'main.games' }} item">Your Games</a>
-        {% endif %}
-        {% if g.team or g.is_admin %}
-          <a href="{{ url_for('main.tournament_list') }}" class="{{ 'active' if endpoint.startswith('main.tournament') }} item">Tournaments</a>
-        {% endif %}
-        {% if g.team %}
-          <a href="{{ url_for('main.charts_page') }}" class="{{ 'active' if endpoint == 'main.charts_page' }} item">Charts</a>
-        {% endif %}
-        <a href="https://playground.pokerbots.org" class="item">Playground</a>
-        {% if g.is_admin %}
-          <a href="{{ url_for('admin.dashboard') }}" class="{{ 'active' if endpoint.startswith('admin.') }} item">Admin</a>
-          <a href="{{ url_for('sponsor.index') }}" class="{{ 'active' if endpoint.startswith('sponsor.') }} item">Sponsor</a>
-        {% endif %}
-        {% endif %}
-        {% if g.user %}
-          <form method="post" action="{{ url_for('auth.logout') }}" class="right item">
+          <form method="post" action="{{ url_for('auth.logout') }}" class="logout">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button>Log out {{ g.user.kerberos }}{% if g.real_user and g.real_user.id != g.user.id %} ({{ g.real_user.kerberos }}){% endif %}</button>
+            <button class="nav-link" type="submit">Log out {{ g.user.kerberos }}{% if g.real_user and g.real_user.id != g.user.id %} ({{ g.real_user.kerberos }}){% endif %}</button>
           </form>
         {% else %}
-          <a href="{{ url_for('auth.login', next=request.path) }}" class="right item">Log in</a>
+          <a href="{{ url_for('auth.login', next=request.path) }}" class="logout">Log in</a>
         {% endif %}
       </div>
-    </div>
+    </header>
 
     <div class="ui main container">
       {% if g.user and g.real_user and g.user.id != g.real_user.id %}

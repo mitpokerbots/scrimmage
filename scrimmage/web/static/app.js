@@ -77,3 +77,32 @@ if (replay) {
     });
   }
 }
+
+// Refresh marked regions from the same page about once a second.
+// Skips a region the pointer or keyboard is in, so a click or a form is not wiped.
+const liveRegions = document.querySelectorAll("[data-live]");
+if (liveRegions.length > 0) {
+  const refresh = async () => {
+    if (document.hidden) return;
+    let response;
+    try {
+      response = await fetch(location.href, { headers: { "X-Live": "1" } });
+    } catch {
+      return;
+    }
+    if (!response.ok || response.redirected) return;
+    const doc = new DOMParser().parseFromString(await response.text(), "text/html");
+    for (const region of liveRegions) {
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && region.contains(focused) && focused !== document.body) {
+        continue;
+      }
+      if (region.querySelector("a:hover, button:hover, input:hover, select:hover, textarea:hover")) {
+        continue;
+      }
+      const next = doc.querySelector(`[data-live="${region.dataset.live}"]`);
+      if (next && region.innerHTML !== next.innerHTML) region.innerHTML = next.innerHTML;
+    }
+  };
+  setInterval(refresh, 1000);
+}

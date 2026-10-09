@@ -8,6 +8,7 @@
   <div class="ui stackable grid">
     <div class="eight wide column">
       <h2>Bots</h2>
+      <div data-live="bots">
       {% if me.current_bot_id and not me.is_disabled %}
         <p>The highlighted bot is the one that plays. A new upload builds once, then becomes the current bot.</p>
       {% else %}
@@ -54,6 +55,7 @@
           {% endfor %}
         </tbody>
       </table>
+      </div>
       <div class="ui top attached segment" id="upload">
         <h3 class="ui dividing header">Upload a bot</h3>
         <form class="ui form" method="POST" action="{{ url_for('main.upload_bot') }}" enctype="multipart/form-data" data-upload>
