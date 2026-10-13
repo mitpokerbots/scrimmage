@@ -1,0 +1,10 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.env
+/data/
+
+# The repo root ignores Python's lib/ and .env.* everywhere.
+!lib/
+!.env.example

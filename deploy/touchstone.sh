@@ -95,6 +95,23 @@ configure() {
       -e "s:@-PREFIX-@:/usr:" \
       "$STATE/shibboleth2.xml.in" > "$CONF/shibboleth2.xml.new"
   mv "$CONF/shibboleth2.xml.new" "$CONF/shibboleth2.xml"
+  # MIT's template disables RSA (!kRSA). Okta encrypts the assertion with
+  # RSA-OAEP, so the SP never sees the authentication statement without this.
+  sed -i 's/!kRSA://g' "$CONF/shibboleth2.xml"
+  # Decrypt with the signing key as well. Okta has been encrypting to that
+  # certificate, and a signing-only credential cannot decrypt it.
+  python3 - "$CONF/shibboleth2.xml" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+needle = 'key="sp-signing-key.pem" certificate="sp-signing-cert.pem"/>'
+extra = needle + """
+        <CredentialResolver type="File" use="encryption"
+            key="sp-signing-key.pem" certificate="sp-signing-cert.pem"/>"""
+if text.count('key="sp-signing-key.pem"') < 2 and needle in text:
+    path.write_text(text.replace(needle, extra, 1))
+PY
   chmod 0644 "$CONF/shibboleth2.xml"
   if ! shibd -t >/tmp/shibd-check.log 2>&1; then
     cat /tmp/shibd-check.log >&2

@@ -4,9 +4,9 @@
 #   journalctl -u scrimmage-autodeploy
 #
 # A push to the branch goes live once GitHub Actions' "python" job (tests) has
-# passed for it, plus the "deploy" job (installer test) if deploy/ changed. A
-# commit whose CI fails, or whose install fails, is skipped; the next push is
-# tried as usual. Turn it off with:
+# passed for it, plus the "deploy" job (installer test) if deploy/ changed,
+# plus the "pkrtask" job if pkrtask/ changed. A commit whose CI fails, or whose
+# install fails, is skipped; the next push is tried as usual. Turn it off with:
 #   sudo systemctl disable --now scrimmage-autodeploy.timer
 set -euo pipefail
 
@@ -27,7 +27,10 @@ fi
 # Which CI jobs must pass first.
 required=python
 if git diff --name-only "$deployed" "$new" 2>/dev/null | grep -q '^deploy/'; then
-  required="python deploy"
+  required="$required deploy"
+fi
+if git diff --name-only "$deployed" "$new" 2>/dev/null | grep -q '^pkrtask/'; then
+  required="$required pkrtask"
 fi
 repo=$(git remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')
 verdict=$(curl -fsS -m 20 -H "Accept: application/vnd.github+json" \

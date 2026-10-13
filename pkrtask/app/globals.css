@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/*
+ * Pkrtask design tokens. Dark mode only. Brand blue is the Pokerbots logo
+ * heart (#016699, as on the scrimmage site); its light tint is the highlight.
+ */
+@theme {
+  --color-brand: #016699;
+  --color-brand-deep: #014e73;
+  --color-highlight: #8ecae6;
+
+  --color-night: #0b0d10;
+  --color-surface: #14181d;
+  --color-raised: #1c2128;
+  --color-line: #2a313a;
+  --color-ink: #e6eaee;
+  --color-ink-muted: #8f99a4;
+
+  --color-status-todo: #8a8f98;
+  --color-status-doing: #e8b84a;
+  --color-status-done: #3fbf6f;
+  --color-status-blocked: #d24242;
+
+  /* Task nodes: dark tinted fills on surface gray */
+  --color-task-done-bg: #15281c;
+  --color-task-done-fg: #3fbf6f;
+  --color-task-startable-bg: #2a1518;
+  --color-task-startable-fg: #e85d5d;
+  --color-task-doing-bg: #2a2415;
+  --color-task-doing-fg: #e8b84a;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-night);
+  color: var(--color-ink);
+}
+
+/* React Flow dark-theme alignment */
+.react-flow {
+  --xy-background-color: var(--color-night);
+}
+
+/* Focus points — persistent glow + dramatic pop on focused tasks and sub-plans */
+.focus-point {
+  box-shadow:
+    0 0 0 2px var(--color-highlight),
+    0 0 14px 3px color-mix(in srgb, var(--color-highlight) 50%, transparent);
+}
+
+@keyframes focus-point-pop {
+  0% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 2px var(--color-highlight),
+      0 0 14px 3px color-mix(in srgb, var(--color-highlight) 50%, transparent);
+  }
+  45% {
+    transform: scale(1.6);
+    box-shadow:
+      0 0 0 3px var(--color-highlight),
+      0 0 32px 10px color-mix(in srgb, var(--color-highlight) 80%, transparent);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 2px var(--color-highlight),
+      0 0 14px 3px color-mix(in srgb, var(--color-highlight) 50%, transparent);
+  }
+}
+
+@keyframes focus-point-glow-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--color-highlight),
+      0 0 14px 3px color-mix(in srgb, var(--color-highlight) 50%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--color-highlight),
+      0 0 24px 8px color-mix(in srgb, var(--color-highlight) 75%, transparent);
+  }
+}
+
+.focus-point-pop-active {
+  animation: focus-point-pop 0.9s ease-in-out;
+}
+
+.focus-point-glow-pulse-active {
+  animation: focus-point-glow-pulse 0.9s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-point-pop-active {
+    animation: none;
+  }
+}

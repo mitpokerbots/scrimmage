@@ -28,3 +28,21 @@ jobs:
         run: uvx --from shellcheck-py shellcheck deploy/*.sh deploy/scrimmage-cli
       - name: Apache + Shibboleth + app in Ubuntu 24.04
         run: docker run --rm -v "$PWD:/src:ro" ubuntu:24.04 bash /src/deploy/test-deploy.sh
+
+  pkrtask:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: pkrtask
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pkrtask/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

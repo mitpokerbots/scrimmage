@@ -52,13 +52,14 @@ def create_app(config: Config | None = None) -> Flask:
     # Apache is the only client and sets X-Forwarded-Proto/-For.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)  # type: ignore[method-assign]
 
-    from scrimmage.web import admin, auth, main, sponsor, worker_api  # noqa: PLC0415
+    from scrimmage.web import admin, auth, main, pkrtask, sponsor, worker_api  # noqa: PLC0415
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)
     app.register_blueprint(admin.bp)
     app.register_blueprint(sponsor.bp)
     app.register_blueprint(worker_api.bp)
+    app.register_blueprint(pkrtask.bp)
 
     app.before_request(common.load_user)
     app.before_request(common.offseason_gate)

@@ -182,6 +182,17 @@ Log in as any kerberos (dev mode has no passwords), create a team, and upload a
 zip of `tests/fixtures/bots/python`. Log in as someone else in a private window,
 make a second team, upload again, and challenge the first team.
 
+Pkrtask (`pkrtask/`) is the admin task planner. With that dev server running,
+in `pkrtask/`:
+
+```sh
+cp .env.example .env && npm install && npm run dev
+```
+
+Open http://localhost:3000/pkrtask. The Next dev server proxies paths outside
+`/pkrtask` (such as `/login`) to Flask on port 8000, so logging in works on
+one origin.
+
 ```
 scrimmage/
   web/            website (Flask views + templates) and worker_api.py
@@ -196,6 +207,7 @@ scrimmage/
 game/             the match image: engine.py (stock), run_match.py (the sandbox inside)
 deploy/           server installers and configuration
 tests/            fast tests, plus real-Docker match tests (including hostile bots)
+pkrtask/          admin-only task planner (Next.js), served at /pkrtask
 ```
 
 ```sh

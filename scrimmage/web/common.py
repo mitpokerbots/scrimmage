@@ -260,9 +260,10 @@ def opens_at(s: Settings) -> datetime | None:
 
 
 # Reachable while the site is closed: logging in (so admins can), assets, and
-# the machinery that keeps running regardless.
+# the machinery that keeps running regardless. pkrtask returns JSON, not the
+# countdown page (a logged-out call would otherwise be a 200 HTML page).
 OPEN_ENDPOINTS = ("static", "healthz")
-OPEN_BLUEPRINTS = ("auth.", "worker_api.")
+OPEN_BLUEPRINTS = ("auth.", "worker_api.", "pkrtask.")
 
 
 def offseason_gate() -> str | Response | None:

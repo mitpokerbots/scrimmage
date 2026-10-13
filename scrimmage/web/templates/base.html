@@ -38,6 +38,7 @@
           {% if g.is_admin %}
             <a href="{{ url_for('admin.dashboard') }}" class="{{ 'is-on' if endpoint.startswith('admin.') }}">Admin</a>
             <a href="{{ url_for('sponsor.index') }}" class="{{ 'is-on' if endpoint.startswith('sponsor.') }}">Sponsor</a>
+            <a href="/pkrtask">Pkrtask</a>
           {% endif %}
         </nav>
         {% endif %}

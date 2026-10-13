@@ -5,6 +5,8 @@ APP=/opt/scrimmage
 ETC=/etc/scrimmage
 # Bot cache and scratch space: disposable, so not on the backed-up data volume.
 WORKER_DATA=/var/lib/scrimmage-worker
+# Pinned Node 22 LTS. Next.js 16 needs >= 20.9; Ubuntu 24.04 ships Node 18.
+NODE_VERSION=v22.23.3
 
 log() { echo "==> $*"; }
 
@@ -23,6 +25,43 @@ install_app() {
   export UV_PYTHON_INSTALL_DIR=/opt/uv/python UV_CACHE_DIR=/var/cache/uv
   (cd "$APP" && uv sync --frozen --no-dev --python 3.13 --quiet)
   chmod -R a+rX "$APP" /opt/uv
+}
+
+# Official tarball into /opt/node (bin/node, bin/npm). Skips the download when
+# that tree already reports NODE_VERSION. linux-arm64 or linux-x64 from uname.
+install_node() {
+  if [ "$(/opt/node/bin/node --version 2>/dev/null || true)" = "$NODE_VERSION" ]; then
+    log "Node $NODE_VERSION already installed"
+    return 0
+  fi
+  local arch name tmp
+  case "$(uname -m)" in
+    aarch64 | arm64) arch=arm64 ;;
+    x86_64) arch=x64 ;;
+    *)
+      echo "No Node.js build for $(uname -m)" >&2
+      return 1
+      ;;
+  esac
+  name="node-${NODE_VERSION}-linux-${arch}.tar.gz"
+  tmp=$(mktemp -d)
+  log "Installing Node $NODE_VERSION ($arch)"
+  curl -fsSL -o "$tmp/$name" "https://nodejs.org/dist/${NODE_VERSION}/${name}"
+  curl -fsSL -o "$tmp/SHASUMS256.txt" "https://nodejs.org/dist/${NODE_VERSION}/SHASUMS256.txt"
+  (
+    cd "$tmp" || exit 1
+    # The published line is "<sha256>  <filename>". awk keeps it for sha256sum -c.
+    awk -v name="$name" '$2 == name { print; found = 1 } END { exit !found }' SHASUMS256.txt > check.txt
+    [ -s check.txt ]
+    sha256sum -c check.txt
+  )
+  rm -rf /opt/node
+  mkdir -p /opt/node
+  tar -xzf "$tmp/$name" -C /opt/node --strip-components=1
+  rm -rf "$tmp"
+  chmod -R a+rX /opt/node
+  [ "$(/opt/node/bin/node --version)" = "$NODE_VERSION" ]
+  [ -x /opt/node/bin/npm ]
 }
 
 # setup_docker [ecr-registry]: Docker with small local logs, and ECR logins

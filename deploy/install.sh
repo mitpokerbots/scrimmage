@@ -17,6 +17,7 @@
 #   /srv/scrimmage    database, bots, logs (DATA_DIR)
 #   /srv/shibboleth   the SP keys registered with MIT, and the Okta external ID
 #   /srv/apache-md    Let's Encrypt account and certificates
+#   /srv/pkrtask      Pkrtask database (separate user, not the scrimmage data)
 set -euo pipefail
 
 # shellcheck source=deploy/lib.sh
@@ -83,10 +84,40 @@ install -d -m 0700 -o scrimmage -g scrimmage "$DATA"
 install -d -m 0755 -o root -g root "$MOUNT/apache-md"
 install -d -m 0700 -o root -g root "$MOUNT/shibboleth"
 setup_worker_user
+# Pkrtask is a separate app: no access to scrimmage's data, env, or Docker.
+id pkrtask >/dev/null 2>&1 || useradd --system --home-dir /srv/pkrtask --shell /usr/sbin/nologin pkrtask
+gpasswd -d pkrtask scrimmage >/dev/null 2>&1 || true
+gpasswd -d pkrtask docker >/dev/null 2>&1 || true
+install -d -m 0700 -o pkrtask -g pkrtask /srv/pkrtask
 
 # --- Application ----------------------------------------------------------------------
 log "Installing the application ($COMMIT)"
 install_app
+
+# Pkrtask (Next.js). The tree hash skips a rebuild when pkrtask/ is unchanged.
+install_node
+pkrtask_rev=$(git -C "$APP" rev-parse "HEAD:pkrtask")
+pkrtask_built=/var/lib/scrimmage-deploy/pkrtask-built
+if [ -f "$pkrtask_built" ] && [ "$(cat "$pkrtask_built")" = "$pkrtask_rev" ] \
+  && [ -f "$APP/pkrtask/.next/BUILD_ID" ]; then
+  log "Pkrtask already built"
+else
+  log "Building Pkrtask"
+  install -d /var/cache/npm
+  (
+    export PATH="/opt/node/bin:$PATH"
+    export npm_config_cache=/var/cache/npm NEXT_TELEMETRY_DISABLED=1
+    cd "$APP/pkrtask" || exit 1
+    # Lowest priority: this server is also playing games while it builds.
+    nice -n 19 npm ci --no-audit --no-fund
+    nice -n 19 npm run build
+  )
+  install -d /var/lib/scrimmage-deploy
+  echo "$pkrtask_rev" > "$pkrtask_built"
+fi
+chmod -R a+rX "$APP/pkrtask"
+install -d -o pkrtask -g pkrtask "$APP/pkrtask/.next/cache"
+chown -R pkrtask:pkrtask "$APP/pkrtask/.next/cache"
 
 cat > "$ETC/env" <<EOF
 DATA_DIR=$DATA
@@ -107,6 +138,15 @@ EOF
 touch "$ETC/env.local"
 chmod 0640 "$ETC/env" "$ETC/env.local"
 chgrp scrimmage "$ETC/env" "$ETC/env.local"
+cat > "$ETC/pkrtask.env" <<EOF
+NODE_ENV=production
+DATABASE_PATH=/srv/pkrtask/pkrtask.sqlite3
+SCRIMMAGE_INTERNAL_URL=http://127.0.0.1:8080
+PUBLIC_URL=https://$DOMAIN
+NEXT_TELEMETRY_DISABLED=1
+EOF
+chmod 0640 "$ETC/pkrtask.env"
+chgrp pkrtask "$ETC/pkrtask.env"
 install -m 0755 "$APP/deploy/scrimmage-cli" /usr/local/bin/scrimmage
 
 # --- Docker and the game image ------------------------------------------------------------
@@ -156,21 +196,21 @@ apache2ctl configtest
 log "Starting services"
 systemctl disable --now scrimmage-backup.timer >/dev/null 2>&1 || true
 rm -f /etc/systemd/system/scrimmage-backup.*
-for unit in scrimmage-web.service scrimmage-worker.service scrimmage-maintain.service \
-  scrimmage-maintain.timer scrimmage-certs.service scrimmage-certs.timer \
-  scrimmage-archive.service scrimmage-archive.timer scrimmage-bake.service \
-  scrimmage-autodeploy.service scrimmage-autodeploy.timer; do
+for unit in scrimmage-web.service scrimmage-pkrtask.service scrimmage-worker.service \
+  scrimmage-maintain.service scrimmage-maintain.timer scrimmage-certs.service \
+  scrimmage-certs.timer scrimmage-archive.service scrimmage-archive.timer \
+  scrimmage-bake.service scrimmage-autodeploy.service scrimmage-autodeploy.timer; do
   install_units "$unit"
 done
 systemctl daemon-reload
-systemctl enable --now shibd apache2 scrimmage-web scrimmage-worker \
+systemctl enable --now shibd apache2 scrimmage-web scrimmage-pkrtask scrimmage-worker \
   scrimmage-maintain.timer scrimmage-certs.timer scrimmage-autodeploy.timer
 if [ -n "$ARCHIVE_BUCKET" ]; then
   systemctl enable --now scrimmage-archive.timer
 fi
 # shibd only when its configuration changed: restarting it logs out anyone mid-login.
 [ "$shib_changed" = no ] || systemctl restart shibd
-systemctl restart scrimmage-web scrimmage-worker
+systemctl restart scrimmage-web scrimmage-pkrtask scrimmage-worker
 systemctl reload apache2
 if [ -n "$WORKER_TEMPLATE" ]; then
   # Fleet machines boot from an image with this commit already installed. Takes
