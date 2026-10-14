@@ -1,19 +1,19 @@
 "use server";
 
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
 import {
   edges,
-  planHistory,
   planLinks,
   plans,
   taskAssignees,
   tasks,
 } from "@/db/schema";
-import { getViewer, listPeople } from "@/lib/auth";
-import { requirePlanAccess } from "./access";
+import { getViewer, listPeople, type Viewer } from "@/lib/auth";
+import { getHub } from "@/realtime/hub";
+import { canSee, requirePlanAccess } from "./access";
 import { buildAdjacency, findPath } from "./graph";
 import {
   buildGeometryPayload,
@@ -24,8 +24,10 @@ import {
   pushSnapshotHistory,
   snapshotPlan,
   type CoalesceInput,
+  type HistoryStepResult,
   type UndoRedoState,
 } from "./history";
+import { assertUnlocked, linkKey, planKey, taskKey } from "./locks";
 import {
   deleteEdgesTouchingNode,
   getPlanGraph,
@@ -40,7 +42,7 @@ import {
   rewriteBoundaryEdgeToPlanLink,
   wouldMoveLinkIntoDescendant,
 } from "./organize";
-import { GRAPH_NODE_KINDS, TASK_EFFORTS, TASK_STATUSES } from "./types";
+import { GRAPH_NODE_KINDS, PLAN_VISIBILITIES, TASK_EFFORTS, TASK_STATUSES } from "./types";
 
 /**
  * Expected, user-facing failures return { ok: false, error } because Next.js
@@ -55,6 +57,7 @@ function failure(error: unknown): { ok: false; error: string } {
 }
 
 async function recordPlanHistory(
+  viewer: Viewer,
   planId: string,
   label: string,
   mutate: () => Promise<void>,
@@ -65,7 +68,14 @@ async function recordPlanHistory(
   await mutate();
   const after = await snapshotPlan(planId);
   if (!after) return;
-  await pushSnapshotHistory({ label, planId, beforeState: before, afterState: after, coalesce });
+  await pushSnapshotHistory({
+    actorKerberos: viewer.kerberos,
+    label,
+    planId,
+    beforeState: before,
+    afterState: after,
+    coalesce,
+  });
 }
 
 function taskPositionLabel(
@@ -90,62 +100,57 @@ function planLinkPositionLabel(
   return "Move sub-plans";
 }
 
-function revalidatePlan(planId: string): void {
+/** Refresh cached pages and tell everyone who can see these plans to reload them. */
+async function planChanged(viewer: Viewer, ...planIds: string[]): Promise<void> {
+  const ids = [...new Set(planIds)];
   revalidatePath("/");
-  revalidatePath(`/plans/${planId}`);
+  for (const id of ids) revalidatePath(`/plans/${id}`);
+  if (ids.length === 0) return;
+  const rows = await db.query.plans.findMany({ where: inArray(plans.id, ids) });
+  getHub().publishChanged(
+    rows.map((row) => ({ id: row.id, scope: row })),
+    viewer.kerberos,
+  );
 }
 
 export async function getUndoRedo(): Promise<ActionResult<UndoRedoState>> {
   try {
-    await getViewer();
-    const undoRedo = await getUndoRedoState();
+    const viewer = await getViewer();
+    const undoRedo = await getUndoRedoState(viewer.kerberos);
     return { ok: true, data: undoRedo };
   } catch (error) {
     return failure(error);
   }
 }
 
-export async function undoChange(
+type HistoryActionData = {
+  graph: PlanGraph;
+  undoRedo: UndoRedoState;
+  focusPlanId: string | null;
+  focusTaskIds: string[];
+  focusLinkIds: string[];
+};
+
+/** Run one of the viewer's own undo/redo steps, then reload the plan they are viewing. */
+async function runHistoryStep(
   viewingPlanId: string,
-): Promise<
-  ActionResult<{
-    graph: PlanGraph;
-    undoRedo: UndoRedoState;
-    focusPlanId: string | null;
-    focusTaskIds: string[];
-    focusLinkIds: string[];
-  }>
-> {
+  step: (viewer: Viewer) => Promise<HistoryStepResult>,
+): Promise<ActionResult<HistoryActionData>> {
   try {
     const viewer = await getViewer();
     const planId = z.uuid().parse(viewingPlanId);
     await requirePlanAccess(planId, viewer, "read");
 
-    const [entry] = await db.query.planHistory.findMany({
-      where: eq(planHistory.undone, false),
-      orderBy: desc(planHistory.id),
-      limit: 1,
-    });
-    if (!entry) throw new Error("Nothing to undo.");
-    if (entry.planId) {
-      await requirePlanAccess(entry.planId, viewer, "write");
-    }
-
-    const undoResult = await performUndo(entry.id);
-    const graph = await getPlanGraph(planId, viewer);
-    const undoRedo = await getUndoRedoState();
-    revalidatePlan(planId);
-    if (undoResult.planId && undoResult.planId !== planId) {
-      revalidatePath(`/plans/${undoResult.planId}`);
-    }
+    const result = await step(viewer);
+    await planChanged(viewer, planId, ...result.touchedPlanIds);
     return {
       ok: true,
       data: {
-        graph,
-        undoRedo,
-        focusPlanId: undoResult.planId,
-        focusTaskIds: undoResult.focusTaskIds,
-        focusLinkIds: undoResult.focusLinkIds,
+        graph: await getPlanGraph(planId, viewer),
+        undoRedo: await getUndoRedoState(viewer.kerberos),
+        focusPlanId: result.planId,
+        focusTaskIds: result.focusTaskIds,
+        focusLinkIds: result.focusLinkIds,
       },
     };
   } catch (error) {
@@ -153,59 +158,30 @@ export async function undoChange(
   }
 }
 
-export async function redoChange(
-  viewingPlanId: string,
-): Promise<
-  ActionResult<{
-    graph: PlanGraph;
-    undoRedo: UndoRedoState;
-    focusPlanId: string | null;
-    focusTaskIds: string[];
-    focusLinkIds: string[];
-  }>
-> {
-  try {
-    const viewer = await getViewer();
-    const planId = z.uuid().parse(viewingPlanId);
-    await requirePlanAccess(planId, viewer, "read");
+export async function undoChange(viewingPlanId: string): Promise<ActionResult<HistoryActionData>> {
+  return runHistoryStep(viewingPlanId, performUndo);
+}
 
-    const [entry] = await db.query.planHistory.findMany({
-      where: eq(planHistory.undone, true),
-      orderBy: [asc(planHistory.id)],
-      limit: 1,
-    });
-    if (!entry) throw new Error("Nothing to redo.");
-    if (entry.planId) {
-      await requirePlanAccess(entry.planId, viewer, "write");
-    }
-
-    const redoResult = await performRedo(entry.id);
-    const graph = await getPlanGraph(planId, viewer);
-    const undoRedo = await getUndoRedoState();
-    revalidatePlan(planId);
-    if (redoResult.planId && redoResult.planId !== planId) {
-      revalidatePath(`/plans/${redoResult.planId}`);
-    }
-    return {
-      ok: true,
-      data: {
-        graph,
-        undoRedo,
-        focusPlanId: redoResult.planId,
-        focusTaskIds: redoResult.focusTaskIds,
-        focusLinkIds: redoResult.focusLinkIds,
-      },
-    };
-  } catch (error) {
-    return failure(error);
-  }
+export async function redoChange(viewingPlanId: string): Promise<ActionResult<HistoryActionData>> {
+  return runHistoryStep(viewingPlanId, performRedo);
 }
 
 // --- Plans ---------------------------------------------------------------
 
+/** Reload a plan's canvas data (after someone else changed it). */
+export async function loadPlan(planId: string): Promise<ActionResult<PlanGraph>> {
+  try {
+    const viewer = await getViewer();
+    return { ok: true, data: await getPlanGraph(z.uuid().parse(planId), viewer) };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 const createPlanSchema = z.object({
   name: z.string().trim().min(1, "Plan name is required.").max(200),
   description: z.string().trim().max(2000).default(""),
+  visibility: z.enum(PLAN_VISIBILITIES),
 });
 
 export async function createPlan(
@@ -221,6 +197,44 @@ export async function createPlan(
     if (!plan) throw new Error("Plan insert returned no row.");
     revalidatePath("/");
     return { ok: true, data: { planId: plan.id } };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * Share a private plan with everyone, along with every private plan inside it
+ * (all the owner's, since private plans can only hold their owner's plans).
+ * One way: shared plans never become private again, so it is not undoable.
+ */
+export async function sharePlan(planId: string): Promise<ActionResult> {
+  try {
+    const viewer = await getViewer();
+    const plan = await requirePlanAccess(z.uuid().parse(planId), viewer, "write");
+    if (plan.visibility === "shared") throw new Error("That plan is already shared.");
+    if (plan.ownerKerberos !== viewer.kerberos) throw new Error("Only the plan's owner can share it.");
+
+    const toShare = new Set<string>([plan.id]);
+    let frontier = [plan.id];
+    while (frontier.length > 0) {
+      const links = await db.query.planLinks.findMany({
+        where: inArray(planLinks.parentPlanId, frontier),
+      });
+      const children = await db.query.plans.findMany({
+        where: inArray(plans.id, links.map((l) => l.childPlanId)),
+      });
+      frontier = children
+        .filter((child) => child.visibility === "private" && !toShare.has(child.id))
+        .map((child) => child.id);
+      for (const id of frontier) toShare.add(id);
+    }
+
+    await db
+      .update(plans)
+      .set({ visibility: "shared" })
+      .where(inArray(plans.id, [...toShare]));
+    await planChanged(viewer, ...toShare);
+    return { ok: true, data: undefined };
   } catch (error) {
     return failure(error);
   }
@@ -245,8 +259,10 @@ export async function updatePlanMeta(
     const viewer = await getViewer();
     const parsed = updatePlanMetaSchema.parse(input);
     await requirePlanAccess(parsed.planId, viewer, "write");
+    assertUnlocked(viewer, [planKey(parsed.planId)]);
     const { deadline, ...rest } = parsed.patch;
     await recordPlanHistory(
+      viewer,
       parsed.planId,
       "Update plan",
       async () => {
@@ -260,7 +276,7 @@ export async function updatePlanMeta(
       },
       { planId: parsed.planId },
     );
-    revalidatePlan(parsed.planId);
+    await planChanged(viewer, parsed.planId);
     return { ok: true, data: undefined };
   } catch (error) {
     return failure(error);
@@ -284,12 +300,12 @@ export async function createTask(
     const parsed = createTaskSchema.parse(input);
     await requirePlanAccess(parsed.planId, viewer, "write");
     let taskId = "";
-    await recordPlanHistory(parsed.planId, "Create task", async () => {
+    await recordPlanHistory(viewer, parsed.planId, "Create task", async () => {
       const [task] = await db.insert(tasks).values(parsed).returning({ id: tasks.id });
       if (!task) throw new Error("Task insert returned no row.");
       taskId = task.id;
     });
-    revalidatePath(`/plans/${parsed.planId}`);
+    await planChanged(viewer, parsed.planId);
     return { ok: true, data: { taskId } };
   } catch (error) {
     return failure(error);
@@ -316,8 +332,10 @@ export async function updateTask(
     const task = await db.query.tasks.findFirst({ where: eq(tasks.id, parsed.taskId) });
     if (!task) throw new Error("Task not found.");
     await requirePlanAccess(task.planId, viewer, "write");
+    assertUnlocked(viewer, [taskKey(task.id)]);
     const { deadline, ...rest } = parsed.patch;
     await recordPlanHistory(
+      viewer,
       task.planId,
       "Update task",
       async () => {
@@ -331,7 +349,7 @@ export async function updateTask(
       },
       { taskId: parsed.taskId },
     );
-    revalidatePath(`/plans/${task.planId}`);
+    await planChanged(viewer, task.planId);
     return { ok: true, data: undefined };
   } catch (error) {
     return failure(error);
@@ -364,6 +382,7 @@ export async function updateTaskPositions(
     const parsed = positionsSchema.parse(input);
     await requirePlanAccess(parsed.planId, viewer, "write");
     const taskIds = parsed.positions.map((p) => p.taskId);
+    assertUnlocked(viewer, taskIds.map(taskKey));
     const beforeRows = await db.query.tasks.findMany({
       where: and(eq(tasks.planId, parsed.planId), inArray(tasks.id, taskIds)),
     });
@@ -407,6 +426,7 @@ export async function updateTaskPositions(
     );
 
     await pushGeometryHistory({
+      actorKerberos: viewer.kerberos,
       label: taskPositionLabel(parsed.positions),
       planId: parsed.planId,
       before,
@@ -431,18 +451,23 @@ export async function setTaskAssignees(
     const parsed = setAssigneesSchema.parse(input);
     const task = await db.query.tasks.findFirst({ where: eq(tasks.id, parsed.taskId) });
     if (!task) throw new Error("Task not found.");
-    await requirePlanAccess(task.planId, viewer, "write");
-    // Only new assignees must be admins; someone who has since lost admin stays removable.
+    const plan = await requirePlanAccess(task.planId, viewer, "write");
+    assertUnlocked(viewer, [taskKey(task.id)]);
+    if (plan.visibility === "private" && parsed.kerberos.some((k) => k !== plan.ownerKerberos)) {
+      throw new Error("Tasks in a private plan can only be assigned to its owner.");
+    }
+    // Only new assignees must be on the roster; someone who has since left it stays removable.
     const current = await db.query.taskAssignees.findMany({
       where: eq(taskAssignees.taskId, parsed.taskId),
     });
     const alreadyAssigned = new Set(current.map((row) => row.kerberos));
-    const people = new Set((await listPeople()).map((p) => p.kerberos));
+    const people = new Set(listPeople().map((p) => p.kerberos));
     const unknown = parsed.kerberos.filter((k) => !alreadyAssigned.has(k) && !people.has(k));
     if (unknown.length > 0) {
-      throw new Error(`Not a scrimmage admin: ${unknown.join(", ")}`);
+      throw new Error(`Not on the Pkrtask roster: ${unknown.join(", ")}`);
     }
     await recordPlanHistory(
+      viewer,
       task.planId,
       "Set assignees",
       async () => {
@@ -457,7 +482,7 @@ export async function setTaskAssignees(
       },
       { taskId: parsed.taskId },
     );
-    revalidatePath(`/plans/${task.planId}`);
+    await planChanged(viewer, task.planId);
     return { ok: true, data: undefined };
   } catch (error) {
     return failure(error);
@@ -471,11 +496,12 @@ export async function deleteTask(taskId: string): Promise<ActionResult> {
     const task = await db.query.tasks.findFirst({ where: eq(tasks.id, id) });
     if (!task) throw new Error("Task not found.");
     await requirePlanAccess(task.planId, viewer, "write");
-    await recordPlanHistory(task.planId, "Delete task", async () => {
+    assertUnlocked(viewer, [taskKey(task.id)]);
+    await recordPlanHistory(viewer, task.planId, "Delete task", async () => {
       await deleteEdgesTouchingNode(task.planId, id);
       await db.delete(tasks).where(eq(tasks.id, id));
     });
-    revalidatePath(`/plans/${task.planId}`);
+    await planChanged(viewer, task.planId);
     return { ok: true, data: undefined };
   } catch (error) {
     return failure(error);
@@ -557,7 +583,7 @@ export async function createEdge(
     }
 
     let edgeId = "";
-    await recordPlanHistory(parsed.planId, "Add dependency", async () => {
+    await recordPlanHistory(viewer, parsed.planId, "Add dependency", async () => {
       const [edge] = await db
         .insert(edges)
         .values({
@@ -572,7 +598,7 @@ export async function createEdge(
       if (!edge) throw new Error("That dependency already exists.");
       edgeId = edge.id;
     });
-    revalidatePath(`/plans/${parsed.planId}`);
+    await planChanged(viewer, parsed.planId);
     return { ok: true, data: { edgeId } };
   } catch (error) {
     if (error instanceof Error && error.message === "That dependency already exists.") {
@@ -589,10 +615,10 @@ export async function deleteEdge(edgeId: string): Promise<ActionResult> {
     const edge = await db.query.edges.findFirst({ where: eq(edges.id, id) });
     if (!edge) throw new Error("Dependency not found.");
     await requirePlanAccess(edge.planId, viewer, "write");
-    await recordPlanHistory(edge.planId, "Remove dependency", async () => {
+    await recordPlanHistory(viewer, edge.planId, "Remove dependency", async () => {
       await db.delete(edges).where(eq(edges.id, id));
     });
-    revalidatePath(`/plans/${edge.planId}`);
+    await planChanged(viewer, edge.planId);
     return { ok: true, data: undefined };
   } catch (error) {
     return failure(error);
@@ -615,14 +641,19 @@ export async function createSubPlan(
   try {
     const viewer = await getViewer();
     const parsed = createSubPlanSchema.parse(input);
-    await requirePlanAccess(parsed.parentPlanId, viewer, "write");
+    const parent = await requirePlanAccess(parsed.parentPlanId, viewer, "write");
 
     let planLinkId = "";
     let childPlanId = "";
-    await recordPlanHistory(parsed.parentPlanId, "Create sub-plan", async () => {
+    await recordPlanHistory(viewer, parsed.parentPlanId, "Create sub-plan", async () => {
       const [child] = await db
         .insert(plans)
-        .values({ name: parsed.name, ownerKerberos: viewer.kerberos, description: "" })
+        .values({
+          name: parsed.name,
+          ownerKerberos: viewer.kerberos,
+          visibility: parent.visibility,
+          description: "",
+        })
         .returning({ id: plans.id });
       if (!child) throw new Error("Sub-plan insert returned no row.");
 
@@ -640,7 +671,7 @@ export async function createSubPlan(
       childPlanId = child.id;
     });
 
-    revalidatePlan(parsed.parentPlanId);
+    await planChanged(viewer, parsed.parentPlanId);
     return { ok: true, data: { planLinkId, childPlanId } };
   } catch (error) {
     return failure(error);
@@ -661,15 +692,18 @@ export async function createPlanLink(
   try {
     const viewer = await getViewer();
     const parsed = createPlanLinkSchema.parse(input);
-    await requirePlanAccess(parsed.parentPlanId, viewer, "write");
-    await requirePlanAccess(parsed.childPlanId, viewer, "read");
+    const parent = await requirePlanAccess(parsed.parentPlanId, viewer, "write");
+    const child = await requirePlanAccess(parsed.childPlanId, viewer, "read");
+    if (parent.visibility === "shared" && child.visibility === "private") {
+      return { ok: false, error: "Share that plan before adding it to a shared plan." };
+    }
 
     if (await wouldCreatePlanAncestorCycle(parsed.parentPlanId, parsed.childPlanId)) {
       return { ok: false, error: "That would create a cycle in the plan hierarchy." };
     }
 
     let planLinkId = "";
-    await recordPlanHistory(parsed.parentPlanId, "Link plan", async () => {
+    await recordPlanHistory(viewer, parsed.parentPlanId, "Link plan", async () => {
       const [link] = await db
         .insert(planLinks)
         .values({
@@ -684,7 +718,7 @@ export async function createPlanLink(
       planLinkId = link.id;
     });
 
-    revalidatePath(`/plans/${parsed.parentPlanId}`);
+    await planChanged(viewer, parsed.parentPlanId);
     return { ok: true, data: { planLinkId } };
   } catch (error) {
     if (error instanceof Error && error.message === "That sub-plan is already on this canvas.") {
@@ -717,6 +751,7 @@ export async function updatePlanLinkPositions(
     const parsed = planLinkPositionsSchema.parse(input);
     await requirePlanAccess(parsed.planId, viewer, "write");
     const linkIds = parsed.positions.map((p) => p.planLinkId);
+    assertUnlocked(viewer, linkIds.map(linkKey));
     const beforeRows = await db.query.planLinks.findMany({
       where: and(eq(planLinks.parentPlanId, parsed.planId), inArray(planLinks.id, linkIds)),
     });
@@ -762,6 +797,7 @@ export async function updatePlanLinkPositions(
     );
 
     await pushGeometryHistory({
+      actorKerberos: viewer.kerberos,
       label: planLinkPositionLabel(parsed.positions),
       planId: parsed.planId,
       before,
@@ -780,11 +816,12 @@ export async function deletePlanLink(planLinkId: string): Promise<ActionResult> 
     const link = await db.query.planLinks.findFirst({ where: eq(planLinks.id, id) });
     if (!link) throw new Error("Sub-plan node not found.");
     await requirePlanAccess(link.parentPlanId, viewer, "write");
-    await recordPlanHistory(link.parentPlanId, "Remove sub-plan", async () => {
+    assertUnlocked(viewer, [linkKey(link.id)]);
+    await recordPlanHistory(viewer, link.parentPlanId, "Remove sub-plan", async () => {
       await deleteEdgesTouchingNode(link.parentPlanId, id);
       await db.delete(planLinks).where(eq(planLinks.id, id));
     });
-    revalidatePath(`/plans/${link.parentPlanId}`);
+    await planChanged(viewer, link.parentPlanId);
     return { ok: true, data: undefined };
   } catch (error) {
     return failure(error);
@@ -887,8 +924,12 @@ export async function moveNodesToPlan(
     if (parsed.sourcePlanId === parsed.targetPlanId) {
       return { ok: false, error: "Source and target must be different plans." };
     }
-    await requirePlanAccess(parsed.sourcePlanId, viewer, "write");
-    await requirePlanAccess(parsed.targetPlanId, viewer, "write");
+    const source = await requirePlanAccess(parsed.sourcePlanId, viewer, "write");
+    const target = await requirePlanAccess(parsed.targetPlanId, viewer, "write");
+    if (source.visibility !== target.visibility) {
+      return { ok: false, error: "Tasks can't move between private and shared plans." };
+    }
+    assertUnlocked(viewer, [...parsed.taskIds.map(taskKey), ...parsed.planLinkIds.map(linkKey)]);
 
     const { taskRows, linkRows } = await validateAndLoadNodesOnPlan(
       parsed.sourcePlanId,
@@ -896,9 +937,17 @@ export async function moveNodesToPlan(
       parsed.planLinkIds,
     );
     const allLinks = await db.query.planLinks.findMany();
-    const { childPlanIdsByParent, parentPlanIdsByChild } = buildPlanLinkAdjacency(allLinks);
+    const { childPlanIdsByParent } = buildPlanLinkAdjacency(allLinks);
     await assertLinksCanReparentTo(parsed.targetPlanId, linkRows, childPlanIdsByParent);
 
+    // The undo snapshot is rooted at a common ancestor; only consider plans the
+    // viewer can see, so it is never someone else's private plan.
+    const visiblePlanIds = new Set(
+      (await db.query.plans.findMany()).filter((plan) => canSee(plan, viewer)).map((plan) => plan.id),
+    );
+    const { parentPlanIdsByChild } = buildPlanLinkAdjacency(
+      allLinks.filter((l) => visiblePlanIds.has(l.parentPlanId) && visiblePlanIds.has(l.childPlanId)),
+    );
     const historyRoot = findHistoryRootPlanId(
       parsed.sourcePlanId,
       parsed.targetPlanId,
@@ -931,7 +980,7 @@ export async function moveNodesToPlan(
     let movedLinks = 0;
     const droppedEdges = drop.length;
 
-    await recordPlanHistory(historyRoot, "Move nodes", async () => {
+    await recordPlanHistory(viewer, historyRoot, "Move nodes", async () => {
       await db.transaction(async (tx) => {
         for (const task of taskRows) {
           const pos = remapped.get(task.id)!;
@@ -961,8 +1010,8 @@ export async function moveNodesToPlan(
       });
     });
 
-    revalidatePlan(parsed.sourcePlanId);
-    revalidatePlan(parsed.targetPlanId);
+    await planChanged(viewer, parsed.sourcePlanId);
+    await planChanged(viewer, parsed.targetPlanId);
     return { ok: true, data: { movedTasks, movedLinks, droppedEdges } };
   } catch (error) {
     return failure(error);
@@ -985,7 +1034,8 @@ export async function packageNodesIntoSubPlan(
   try {
     const viewer = await getViewer();
     const parsed = packageNodesIntoSubPlanSchema.parse(input);
-    await requirePlanAccess(parsed.parentPlanId, viewer, "write");
+    const parent = await requirePlanAccess(parsed.parentPlanId, viewer, "write");
+    assertUnlocked(viewer, [...parsed.taskIds.map(taskKey), ...parsed.planLinkIds.map(linkKey)]);
 
     const { taskRows, linkRows } = await validateAndLoadNodesOnPlan(
       parsed.parentPlanId,
@@ -1016,11 +1066,16 @@ export async function packageNodesIntoSubPlan(
     let childPlanId = "";
     let droppedEdges = 0;
 
-    await recordPlanHistory(parsed.parentPlanId, "Package into sub-plan", async () => {
+    await recordPlanHistory(viewer, parsed.parentPlanId, "Package into sub-plan", async () => {
       await db.transaction(async (tx) => {
         const [child] = await tx
           .insert(plans)
-          .values({ name: parsed.name, ownerKerberos: viewer.kerberos, description: "" })
+          .values({
+            name: parsed.name,
+            ownerKerberos: viewer.kerberos,
+            visibility: parent.visibility,
+            description: "",
+          })
           .returning({ id: plans.id });
         if (!child) throw new Error("Sub-plan insert returned no row.");
 
@@ -1087,7 +1142,7 @@ export async function packageNodesIntoSubPlan(
       });
     });
 
-    revalidatePlan(parsed.parentPlanId);
+    await planChanged(viewer, parsed.parentPlanId);
     return { ok: true, data: { planLinkId, childPlanId, droppedEdges } };
   } catch (error) {
     return failure(error);

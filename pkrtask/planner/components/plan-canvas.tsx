@@ -39,6 +39,8 @@ import {
   packageNodesIntoSubPlan,
   redoChange,
   setTaskAssignees,
+  loadPlan,
+  sharePlan,
   undoChange,
   updatePlanLinkPositions,
   updatePlanMeta,
@@ -74,8 +76,13 @@ import {
 } from "../plan-focus";
 import { wouldMoveLinkIntoDescendant } from "../organize";
 import type { PlanGraph } from "../queries";
+import { EMPTY_FILTERS, taskMatchesFilters, type TaskFilters } from "../task-filters";
 import type { Person } from "@/lib/auth";
 import type { EdgeDto, GraphNodeKind, SubPlanDto, TaskDto } from "../types";
+import { FilterBar, readStoredFilters, writeStoredFilters } from "./filter-bar";
+import { editorColor } from "./editing-outline";
+import type { LockKey, LockView } from "@/realtime/protocol";
+import { useRealtime } from "@/realtime/use-realtime";
 import { OrganizeBar, type OrganizeDestination } from "./organize-bar";
 import { SubPlanFrame, type SubPlanFrameNode, PlanCanvasActionsContext } from "./sub-plan-frame";
 import { SubPlanInspector, type SubPlanPatch } from "./sub-plan-inspector";
@@ -269,6 +276,57 @@ function insertSubPlanIntoSubPlans(
     if (sp.childPlanId === parentPlanId) nested = [...sp.subPlans, subPlan];
     return { ...sp, subPlans: insertSubPlanIntoSubPlans(nested, parentPlanId, subPlan) };
   });
+}
+
+type PlanScope = Pick<SubPlanDto, "visibility" | "ownerKerberos">;
+
+/** Visibility and owner of a plan shown on this canvas (the root or any nested sub-plan). */
+function scopeOfPlan(graph: PlanGraph, planId: string): PlanScope | null {
+  if (graph.plan.id === planId) return graph.plan;
+  const pending = [...graph.subPlans];
+  while (pending.length > 0) {
+    const sp = pending.pop();
+    if (!sp) continue;
+    if (sp.childPlanId === planId) return sp;
+    pending.push(...sp.subPlans);
+  }
+  return null;
+}
+
+function visibilityOfPlan(graph: PlanGraph, planId: string): SubPlanDto["visibility"] | null {
+  return scopeOfPlan(graph, planId)?.visibility ?? null;
+}
+
+/** Every plan whose contents this canvas shows. */
+function planIdsInGraph(graph: PlanGraph): Set<string> {
+  const ids = new Set([graph.plan.id]);
+  const pending = [...graph.subPlans];
+  while (pending.length > 0) {
+    const sp = pending.pop();
+    if (!sp) continue;
+    ids.add(sp.childPlanId);
+    pending.push(...sp.subPlans);
+  }
+  return ids;
+}
+
+/** What selecting (or dragging) these nodes locks: tasks, and sub-plans with their details. */
+function lockKeysForSceneIds(scene: Scene, sceneIds: Iterable<string>): LockKey[] {
+  const keys: LockKey[] = [];
+  for (const id of sceneIds) {
+    const task = scene.tasks.find((t) => t.sceneId === id);
+    if (task) {
+      keys.push(`task:${task.task.id}`);
+      continue;
+    }
+    const frame = scene.frames.find((f) => f.sceneId === id);
+    if (frame) keys.push(`link:${frame.linkId}`, `plan:${frame.subPlan.childPlanId}`);
+  }
+  return keys;
+}
+
+function frameEditor(locks: ReadonlyMap<LockKey, LockView>, frame: SceneFrame): LockView | null {
+  return locks.get(`link:${frame.linkId}`) ?? locks.get(`plan:${frame.subPlan.childPlanId}`) ?? null;
 }
 
 function insertSubPlanIntoPlan(graph: PlanGraph, parentPlanId: string, subPlan: SubPlanDto): PlanGraph {
@@ -746,6 +804,9 @@ function buildFlowNodes(
   externallyBlocked: boolean,
   focusedIds: ReadonlySet<string>,
   onToggleFocus: (nodeId: string) => void,
+  filters: TaskFilters,
+  viewerKerberos: string,
+  lockedByOthers: ReadonlyMap<LockKey, LockView>,
 ): FlowNode[] {
   const nodes: FlowNode[] = [];
   const nonStartable = applyExternalBlock(nonStartableSceneIds(scene), scene, externallyBlocked);
@@ -755,6 +816,7 @@ function buildFlowNodes(
     const isChromeless = chromeless.has(frame.sceneId);
     const atFocusLevel = pathsEqual(frame.path, focusPath);
     const view = projectToView(frame.x, frame.y, frame.width, frame.height, frame.scale, focusAffine);
+    const editor = isChromeless ? null : frameEditor(lockedByOthers, frame);
     nodes.push({
       id: frame.sceneId,
       type: "subPlanFrame",
@@ -762,7 +824,7 @@ function buildFlowNodes(
       style: { width: view.width, height: view.height },
       zIndex: nodeZIndex(frame.path, true),
       hidden,
-      draggable: !hidden && !isChromeless && !startableOnly,
+      draggable: !hidden && !isChromeless && !startableOnly && !editor,
       selectable: !hidden && !isChromeless,
       selected: selectedSceneIds.has(frame.sceneId),
       data: {
@@ -771,9 +833,10 @@ function buildFlowNodes(
         path: frame.path,
         scale: view.scale,
         chromeless: isChromeless,
-        resizable: atFocusLevel && !isChromeless && !startableOnly,
+        resizable: atFocusLevel && !isChromeless && !startableOnly && !editor,
         focused: !isChromeless && focusedIds.has(frame.linkId),
         onToggleFocus,
+        editor,
       },
     });
   }
@@ -782,6 +845,7 @@ function buildFlowNodes(
     const hidden = !visible.has(task.sceneId);
     const atFocusLevel = pathsEqual(task.path, focusPath);
     const view = projectToView(task.x, task.y, task.width, task.height, task.scale, focusAffine);
+    const editor = lockedByOthers.get(`task:${task.task.id}`) ?? null;
     nodes.push({
       id: task.sceneId,
       type: "task",
@@ -789,7 +853,7 @@ function buildFlowNodes(
       style: { width: view.width, height: view.height },
       zIndex: nodeZIndex(task.path, false),
       hidden,
-      draggable: !hidden && !startableOnly,
+      draggable: !hidden && !startableOnly && !editor,
       selectable: !hidden,
       selected: selectedSceneIds.has(task.sceneId),
       data: {
@@ -797,10 +861,12 @@ function buildFlowNodes(
         scale: view.scale,
         path: task.path,
         ownerPlanId: task.ownerPlanId,
-        resizable: atFocusLevel && !startableOnly,
+        resizable: atFocusLevel && !startableOnly && !editor,
         startable: !nonStartable.has(task.sceneId),
         focused: focusedIds.has(task.task.id),
         onToggleFocus,
+        dimmed: !taskMatchesFilters(task.task, filters, viewerKerberos),
+        editor,
       },
     });
   }
@@ -873,11 +939,13 @@ export function PlanCanvas({
   people,
   focusParam,
   undoRedo,
+  viewerKerberos,
 }: {
   graph: PlanGraph;
   people: Person[];
   focusParam?: string | null;
   undoRedo: UndoRedoState;
+  viewerKerberos: string;
 }) {
   const router = useRouter();
   const reloadPendingRef = useRef(false);
@@ -902,6 +970,7 @@ export function PlanCanvas({
         people={people}
         focusParam={focusParam ?? null}
         undoRedo={undoRedo}
+        viewerKerberos={viewerKerberos}
         requestGraphReload={requestGraphReload}
       />
     </ReactFlowProvider>
@@ -958,12 +1027,14 @@ function CanvasInner({
   people,
   focusParam,
   undoRedo: initialUndoRedo,
+  viewerKerberos,
   requestGraphReload,
 }: {
   graph: PlanGraph;
   people: Person[];
   focusParam: string | null;
   undoRedo: UndoRedoState;
+  viewerKerberos: string;
   requestGraphReload: () => void;
 }) {
   const router = useRouter();
@@ -988,6 +1059,7 @@ function CanvasInner({
   const [undoRedoState, setUndoRedoState] = useState<UndoRedoState>(() => initialUndoRedo);
   const [panSpeed, setPanSpeed] = useState(readPanSpeed);
   const [startableOnly, setStartableOnly] = useState(readStartableOnly);
+  const [filters, setFilters] = useState<TaskFilters>(readStoredFilters);
   const [graphSyncTick, setGraphSyncTick] = useState(0);
   const [pendingFocusSceneIds, setPendingFocusSceneIds] = useState<Set<string> | null>(null);
   const { focusedIds, toggleFocus } = useFocusPoints(initialGraph.plan.id);
@@ -1037,6 +1109,13 @@ function CanvasInner({
   }, [initialGraph]);
 
   const scene = useMemo(() => flattenScene(clientGraph), [clientGraph]);
+  const taskFilterStats = useMemo(() => {
+    let matched = 0;
+    for (const entry of scene.tasks) {
+      if (taskMatchesFilters(entry.task, filters, viewerKerberos)) matched += 1;
+    }
+    return { matched, total: scene.tasks.length };
+  }, [scene.tasks, filters, viewerKerberos]);
   const sceneRef = useRef(scene);
   useEffect(() => {
     sceneRef.current = scene;
@@ -1173,6 +1252,64 @@ function CanvasInner({
   } | null>(null);
   const nodesRef = useRef<FlowNode[]>([]);
 
+  // --- Live collaboration -------------------------------------------------
+  const reloadSeqRef = useRef(0);
+  const reloadDeferredRef = useRef(false);
+  const reloadTimerRef = useRef<number | null>(null);
+
+  const applyServerGraph = useCallback((next: PlanGraph) => {
+    setClientGraph(next);
+    setFocusPath((prev) => {
+      const valid = validateFocusPath(next, prev);
+      return pathsEqual(valid, prev) ? prev : valid;
+    });
+    setGraphSyncTick((tick) => tick + 1);
+  }, []);
+
+  /** Replace local state with the server's; never mid-drag (it would snap nodes back). */
+  const reloadFromServer = useCallback(async () => {
+    if (isDraggingRef.current || frameDragRef.current) {
+      reloadDeferredRef.current = true;
+      return;
+    }
+    const seq = ++reloadSeqRef.current;
+    const result = await loadPlan(clientGraphRef.current.plan.id);
+    if (seq !== reloadSeqRef.current) return;
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    if (isDraggingRef.current || frameDragRef.current) {
+      reloadDeferredRef.current = true;
+      return;
+    }
+    applyServerGraph(result.data);
+  }, [applyServerGraph]);
+
+  const onPlansChanged = useCallback(
+    (planIds: string[]) => {
+      const shown = planIdsInGraph(clientGraphRef.current);
+      if (!planIds.some((id) => shown.has(id))) return;
+      // Bursts of saves (a multi-node drag) become one reload.
+      if (reloadTimerRef.current !== null) window.clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = window.setTimeout(() => {
+        reloadTimerRef.current = null;
+        void reloadFromServer();
+      }, 150);
+    },
+    [reloadFromServer],
+  );
+
+  useEffect(
+    () => () => {
+      if (reloadTimerRef.current !== null) window.clearTimeout(reloadTimerRef.current);
+    },
+    [],
+  );
+
+  const realtime = useRealtime(initialGraph.plan.id, viewerKerberos, onPlansChanged);
+  const { claim } = realtime;
+
   const handleFrameResizeEnd = useCallback(
     (linkId: string, path: ScenePath, frameScale: number, size: Rect) => {
       const graph = clientGraphRef.current;
@@ -1305,6 +1442,9 @@ function CanvasInner({
       clientGraph.externallyBlocked,
       focusedIds,
       toggleFocus,
+      filters,
+      viewerKerberos,
+      realtime.lockedByOthers,
     );
     setNodes((prev) => mergeFlowNodes(built, prev));
     setEdges(buildFlowEdges(renderScene, visible, focusAffine));
@@ -1332,7 +1472,7 @@ function CanvasInner({
         }
       });
     }
-  }, [renderScene, focusPath, focusAffine, visible, chromeless, effectiveSelectedSceneIds, graphSyncTick, maxZoom, storeApi, startableOnly, clientGraph.externallyBlocked, focusedIds, toggleFocus]);
+  }, [renderScene, focusPath, focusAffine, visible, chromeless, effectiveSelectedSceneIds, graphSyncTick, maxZoom, storeApi, startableOnly, clientGraph.externallyBlocked, focusedIds, toggleFocus, filters, viewerKerberos, realtime.lockedByOthers]);
 
   useEffect(() => {
     nodesRef.current = nodes;
@@ -1364,6 +1504,10 @@ function CanvasInner({
         ctx.externallyBlocked,
         new Set<string>(),
         () => {},
+        // Mount fit only reads geometry. Empty filters leave dimming off.
+        EMPTY_FILTERS,
+        "",
+        new Map(),
       );
       const target = viewportForVisibleNodes(
         mountNodes,
@@ -1476,6 +1620,24 @@ function CanvasInner({
     if (!singleSelectedSceneId) return null;
     return findSceneFrame(scene, singleSelectedSceneId) ?? null;
   }, [scene, singleSelectedSceneId]);
+
+  // Tasks in a private plan can only go to its owner (the server enforces this too).
+  const assignablePeople = useMemo(() => {
+    const scope = selectedTask ? scopeOfPlan(clientGraph, selectedTask.planId) : null;
+    if (scope?.visibility !== "private") return people;
+    return people.filter((p) => p.kerberos === scope.ownerKerberos);
+  }, [clientGraph, people, selectedTask]);
+
+  // Hold locks on whatever is selected, so nobody else edits it meanwhile.
+  const selectionLockKeys = useMemo(
+    () => lockKeysForSceneIds(scene, effectiveSelectedSceneIds),
+    [scene, effectiveSelectedSceneIds],
+  );
+  const selectionLockKeysRef = useRef(selectionLockKeys);
+  useEffect(() => {
+    selectionLockKeysRef.current = selectionLockKeys;
+    claim(selectionLockKeys);
+  }, [claim, selectionLockKeys]);
 
   const organizeSelection = useMemo(
     () => resolveOrganizeIds(scene, focusPath, effectiveSelectedSceneIds),
@@ -1648,6 +1810,16 @@ function CanvasInner({
     });
   }, [onHistoryMutationSuccess]);
 
+  const handleShareSubPlan = useCallback((childPlanId: string) => {
+    void sharePlan(childPlanId).then((result) => {
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      void reloadFromServer();
+    });
+  }, [reloadFromServer]);
+
   const handleDeleteSubPlan = useCallback((linkId: string) => {
     const prevGraph = clientGraphRef.current;
     setClientGraph((g) => removeSubPlanEverywhere(g, linkId));
@@ -1725,12 +1897,20 @@ function CanvasInner({
           setError(result.error);
           return;
         }
+        const parentVisibility = visibilityOfPlan(clientGraphRef.current, focusedPlanId);
+        if (!parentVisibility) {
+          setError("Couldn't read the parent plan.");
+          requestGraphReload();
+          return;
+        }
         const subPlan: SubPlanDto = {
           linkId: result.data.planLinkId,
           parentPlanId: focusedPlanId,
           childPlanId: result.data.childPlanId,
           name: name.trim(),
           description: "",
+          ownerKerberos: viewerKerberos,
+          visibility: parentVisibility,
           x: canonical.x,
           y: canonical.y,
           width: 360,
@@ -1749,7 +1929,7 @@ function CanvasInner({
         onHistoryMutationSuccess();
       });
     },
-    [focusPath, focusedPlanId, onHistoryMutationSuccess, startableOnly],
+    [focusPath, focusedPlanId, onHistoryMutationSuccess, requestGraphReload, startableOnly, viewerKerberos],
   );
 
   const refreshGraphFromServer = useCallback(() => {
@@ -1897,8 +2077,12 @@ function CanvasInner({
     });
   }, [onHistoryMutationSuccess]);
 
-  const onNodeDragStart = useCallback((_event: MouseEvent | TouchEvent, node: FlowNode) => {
+  const onNodeDragStart = useCallback((_event: MouseEvent | TouchEvent, node: FlowNode, draggedNodes: FlowNode[]) => {
     isDraggingRef.current = true;
+    claim([
+      ...selectionLockKeysRef.current,
+      ...lockKeysForSceneIds(sceneRef.current, [node.id, ...draggedNodes.map((n) => n.id)]),
+    ]);
     if (node.type !== "subPlanFrame") return;
     const prefix: ScenePath = [...node.data.path, node.data.linkId];
     const nodeStarts = new Map<string, { x: number; y: number }>();
@@ -1914,7 +2098,7 @@ function CanvasInner({
       start: { ...node.position },
       nodeStarts,
     };
-  }, []);
+  }, [claim]);
 
   const onNodeDragStop = useCallback(
     (_event: MouseEvent | TouchEvent, node: FlowNode, draggedNodes: FlowNode[]) => {
@@ -1928,8 +2112,13 @@ function CanvasInner({
       frameDragRef.current = null;
       isDraggingRef.current = false;
       setGraphSyncTick((tick) => tick + 1);
+      claim(selectionLockKeysRef.current);
+      if (reloadDeferredRef.current) {
+        reloadDeferredRef.current = false;
+        void reloadFromServer();
+      }
     },
-    [saveFramePosition, saveTaskPosition],
+    [claim, reloadFromServer, saveFramePosition, saveTaskPosition],
   );
 
   const onConnect = useCallback<OnConnect>(
@@ -2080,6 +2269,41 @@ function CanvasInner({
           {headerRollup.done}/{headerRollup.total} tasks
           {directSubPlanCount > 0 ? ` · ${directSubPlanCount} sub-plans` : ""}
         </span>
+        {clientGraph.plan.visibility === "private" ? (
+          <span className="flex items-center gap-2">
+            <span className="rounded-full border border-highlight/40 px-2 py-0.5 text-xs text-highlight">
+              Private
+            </span>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Share this plan, and every private plan inside it, with everyone? This can't be undone.",
+                  )
+                ) {
+                  handleShareSubPlan(clientGraph.plan.id);
+                }
+              }}
+            >
+              Share with everyone
+            </Button>
+          </span>
+        ) : null}
+        {realtime.others.length > 0 ? (
+          <span className="flex items-center gap-1" aria-label="Also viewing">
+            {realtime.others.map((person) => (
+              <span
+                key={person.kerberos}
+                title={`${person.name} is viewing`}
+                className="rounded-full px-2 py-0.5 text-xs font-semibold text-night"
+                style={{ backgroundColor: editorColor(person.kerberos) }}
+              >
+                {person.name}
+              </span>
+            ))}
+          </span>
+        ) : null}
         <Button
           variant="ghost"
           disabled={startableOnly}
@@ -2205,19 +2429,31 @@ function CanvasInner({
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#2e2833" />
         <Controls position="bottom-left" showInteractive={false} />
-        <div className="absolute bottom-4 left-14 z-10 flex flex-col gap-2">
-          <PanSpeedControl
-            value={panSpeed}
+        <div className="absolute bottom-4 left-14 z-10 flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-2">
+            <PanSpeedControl
+              value={panSpeed}
+              onChange={(next) => {
+                setPanSpeed(next);
+                window.localStorage.setItem(PAN_SPEED_KEY, String(next));
+              }}
+            />
+            <StartableOnlyControl
+              checked={startableOnly}
+              onChange={(next) => {
+                setStartableOnly(next);
+                window.localStorage.setItem(STARTABLE_ONLY_KEY, String(next));
+              }}
+            />
+          </div>
+          <FilterBar
+            filters={filters}
+            people={people}
+            matchedCount={taskFilterStats.matched}
+            totalCount={taskFilterStats.total}
             onChange={(next) => {
-              setPanSpeed(next);
-              window.localStorage.setItem(PAN_SPEED_KEY, String(next));
-            }}
-          />
-          <StartableOnlyControl
-            checked={startableOnly}
-            onChange={(next) => {
-              setStartableOnly(next);
-              window.localStorage.setItem(STARTABLE_ONLY_KEY, String(next));
+              setFilters(next);
+              writeStoredFilters(next);
             }}
           />
         </div>
@@ -2240,11 +2476,12 @@ function CanvasInner({
         <TaskInspector
           key={selectedTask.id}
           task={selectedTask}
-          people={people}
+          people={assignablePeople}
           onPatch={handlePatch}
           onSetAssignees={handleSetAssignees}
           onDelete={handleDeleteTask}
           onClose={() => setSelectedSceneIds(new Set())}
+          lockedBy={realtime.lockedByOthers.get(`task:${selectedTask.id}`)?.name ?? null}
         />
       ) : null}
 
@@ -2256,7 +2493,9 @@ function CanvasInner({
           people={people}
           onPatch={handleSubPlanPatch}
           onDelete={handleDeleteSubPlan}
+          onShare={handleShareSubPlan}
           onClose={() => setSelectedSceneIds(new Set())}
+          lockedBy={frameEditor(realtime.lockedByOthers, selectedFrame)?.name ?? null}
         />
       ) : null}
 

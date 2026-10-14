@@ -13,6 +13,7 @@ CREATE TABLE `edges` (
 CREATE UNIQUE INDEX `edges_from_to_unique` ON `edges` (`from_kind`,`from_id`,`to_kind`,`to_id`);--> statement-breakpoint
 CREATE TABLE `plan_history` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`actor_kerberos` text NOT NULL,
 	`label` text NOT NULL,
 	`plan_id` text,
 	`before_state` text,
@@ -49,11 +50,13 @@ CREATE TABLE `plans` (
 	`name` text NOT NULL,
 	`description` text DEFAULT '' NOT NULL,
 	`owner_kerberos` text NOT NULL,
+	`visibility` text NOT NULL,
 	`status` text DEFAULT 'todo' NOT NULL,
 	`effort` text,
 	`deadline` integer,
 	`notes` text DEFAULT '' NOT NULL,
 	`created_at` integer NOT NULL,
+	CONSTRAINT "plans_visibility" CHECK(visibility IN ('private', 'shared')),
 	CONSTRAINT "plans_status" CHECK(status IN ('todo', 'doing', 'done', 'blocked')),
 	CONSTRAINT "plans_effort" CHECK("effort" IS NULL OR effort IN ('S', 'M', 'L'))
 );

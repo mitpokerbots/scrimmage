@@ -66,6 +66,8 @@ function subPlan(
     height: 240,
     assignees: [],
     rollup: emptyRollup(),
+    ownerKerberos: "ab",
+    visibility: "shared",
     status: "todo",
     effort: null,
     deadline: null,

@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
   // A stray lockfile exists in the home directory; pin the workspace root.
   turbopack: { root: __dirname },
   poweredByHeader: false,
+  // Compression buffers the live-collaboration event stream (app/api/realtime).
+  compress: false,
   async headers() {
     return [
       {

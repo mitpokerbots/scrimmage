@@ -8,7 +8,7 @@ import {
   text,
   unique,
 } from "drizzle-orm/sqlite-core";
-import { GRAPH_NODE_KINDS, TASK_EFFORTS, TASK_STATUSES } from "../planner/types";
+import { GRAPH_NODE_KINDS, PLAN_VISIBILITIES, TASK_EFFORTS, TASK_STATUSES } from "../planner/types";
 
 const PLAN_ROLES = ["viewer", "editor"] as const;
 
@@ -36,6 +36,12 @@ export const plans = sqliteTable(
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
     ownerKerberos: text("owner_kerberos").notNull(),
+    /**
+     * Private plans are seen and edited only by their owner. A shared plan
+     * never contains a private one (planner/actions.ts keeps this true), so a
+     * shared plan's whole subtree is shared.
+     */
+    visibility: text("visibility", { enum: PLAN_VISIBILITIES }).notNull(),
     status: text("status", { enum: TASK_STATUSES }).notNull().default("todo"),
     effort: text("effort", { enum: TASK_EFFORTS }),
     deadline: integer("deadline", { mode: "timestamp_ms" }),
@@ -43,12 +49,13 @@ export const plans = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [
+    check("plans_visibility", inValues(t.visibility.name, PLAN_VISIBILITIES)),
     check("plans_status", inValues(t.status.name, TASK_STATUSES)),
     check("plans_effort", sql`${sql.identifier(t.effort.name)} IS NULL OR ${inValues(t.effort.name, TASK_EFFORTS)}`),
   ],
 );
 
-/** Per-plan sharing. Not enforced while every admin can edit every plan (planner/access.ts). */
+/** Per-plan sharing with specific people. Not used yet: plans are private or shared with everyone. */
 export const planMembers = sqliteTable(
   "plan_members",
   {
@@ -148,11 +155,12 @@ export const planLinks = sqliteTable(
 );
 
 /**
- * Global undo/redo stack. Entries are ordered by `id`, which only grows, so
- * entries written in the same millisecond still have a definite order.
+ * Undo/redo stacks, one per person. Entries are ordered by `id`, which only
+ * grows, so entries written in the same millisecond still have a definite order.
  */
 export const planHistory = sqliteTable("plan_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  actorKerberos: text("actor_kerberos").notNull(),
   label: text("label").notNull(),
   /** Plan this entry primarily affects (for navigation after undo). */
   planId: text("plan_id"),

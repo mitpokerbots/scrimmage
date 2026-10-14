@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   planHistory,
@@ -8,8 +8,12 @@ import {
   taskAssignees,
   tasks,
 } from "@/db/schema";
-import type { EdgeDto, TaskDto, TaskEffort, TaskStatus } from "./types";
+import type { Viewer } from "@/lib/auth";
+import type { LockKey } from "@/realtime/protocol";
+import { assertUnlocked, linkKey, planKey, taskKey } from "./locks";
+import type { EdgeDto, PlanVisibility, TaskDto, TaskEffort, TaskStatus } from "./types";
 import {
+  type DbExecutor,
   loadPlanSubtree,
   mapEdgeRows,
   mapTaskRows,
@@ -25,6 +29,8 @@ export type PlanSnapshotPlan = {
   deadline: string | null;
   notes: string;
   ownerKerberos: string;
+  /** Compared, but only written when undo re-creates a deleted plan: undo never un-shares. */
+  visibility: PlanVisibility;
 };
 
 export type PlanLinkSnapshot = {
@@ -136,6 +142,7 @@ function planFieldsFromRow(row: {
   deadline: Date | null;
   notes: string;
   ownerKerberos: string;
+  visibility: PlanVisibility;
 }): PlanSnapshotPlan {
   return {
     id: row.id,
@@ -146,6 +153,7 @@ function planFieldsFromRow(row: {
     deadline: row.deadline ? row.deadline.toISOString() : null,
     notes: row.notes,
     ownerKerberos: row.ownerKerberos,
+    visibility: row.visibility,
   };
 }
 
@@ -194,8 +202,11 @@ function buildSnapshotFromBundle(
 }
 
 /** Capture a plan subtree for undo/redo (depth cap + path-only cycle guard). */
-export async function snapshotPlan(planId: string): Promise<PlanSnapshot | null> {
-  const bundles = await loadPlanSubtree(planId);
+export async function snapshotPlan(
+  planId: string,
+  executor: DbExecutor = db,
+): Promise<PlanSnapshot | null> {
+  const bundles = await loadPlanSubtree(planId, executor);
   return buildSnapshotFromBundle(planId, bundles, new Set(), 0);
 }
 
@@ -336,6 +347,7 @@ async function upsertPlanRow(
       name: plan.name,
       description: plan.description,
       ownerKerberos: plan.ownerKerberos,
+      visibility: plan.visibility,
       status: plan.status,
       effort: plan.effort,
       deadline: plan.deadline ? new Date(plan.deadline) : null,
@@ -568,13 +580,16 @@ async function applyHistoryPayload(tx: HistoryTx, payload: HistoryPayload): Prom
 }
 
 async function commitHistoryEntry(entry: {
+  actorKerberos: string;
   label: string;
   planId: string;
   beforeState: HistoryPayload;
   afterState: HistoryPayload;
 }): Promise<void> {
-  await db.delete(planHistory).where(eq(planHistory.undone, true));
+  const mine = eq(planHistory.actorKerberos, entry.actorKerberos);
+  await db.delete(planHistory).where(and(mine, eq(planHistory.undone, true)));
   await db.insert(planHistory).values({
+    actorKerberos: entry.actorKerberos,
     label: entry.label,
     planId: entry.planId,
     beforeState: entry.beforeState,
@@ -583,13 +598,13 @@ async function commitHistoryEntry(entry: {
   });
 
   const kept = await db.query.planHistory.findMany({
-    where: eq(planHistory.undone, false),
+    where: and(mine, eq(planHistory.undone, false)),
     orderBy: desc(planHistory.id),
     limit: HISTORY_LIMIT,
   });
   const keepIds = new Set(kept.map((h) => h.id));
   const allCommitted = await db.query.planHistory.findMany({
-    where: eq(planHistory.undone, false),
+    where: and(mine, eq(planHistory.undone, false)),
   });
   const toDrop = allCommitted.filter((h) => !keepIds.has(h.id)).map((h) => h.id);
   if (toDrop.length > 0) {
@@ -597,8 +612,32 @@ async function commitHistoryEntry(entry: {
   }
 }
 
-/** Record a structural mutation; clears redo branch. Coalesces single-entity snapshot bursts. */
+async function latestUndoable(actorKerberos: string, executor: DbExecutor = db) {
+  const [entry] = await executor.query.planHistory.findMany({
+    where: and(eq(planHistory.actorKerberos, actorKerberos), eq(planHistory.undone, false)),
+    orderBy: desc(planHistory.id),
+    limit: 1,
+  });
+  return entry;
+}
+
+async function earliestRedoable(actorKerberos: string, executor: DbExecutor = db) {
+  const [entry] = await executor.query.planHistory.findMany({
+    where: and(eq(planHistory.actorKerberos, actorKerberos), eq(planHistory.undone, true)),
+    orderBy: asc(planHistory.id),
+    limit: 1,
+  });
+  return entry;
+}
+
+/**
+ * Record a structural mutation in the actor's own history; clears their redo
+ * branch. Merges a burst of edits to one entity into one step, but only when
+ * nothing else changed in between (so undoing the merged step cannot revert
+ * someone else's edit).
+ */
 export async function pushSnapshotHistory(entry: {
+  actorKerberos: string;
   label: string;
   planId: string;
   beforeState: PlanSnapshot;
@@ -609,18 +648,17 @@ export async function pushSnapshotHistory(entry: {
   const afterPayload: SnapshotPayload = { kind: "snapshot", plan: entry.afterState };
 
   if (entry.coalesce) {
-    const [latest] = await db.query.planHistory.findMany({
-      where: eq(planHistory.undone, false),
-      orderBy: desc(planHistory.id),
-      limit: 1,
-    });
+    const latest = await latestUndoable(entry.actorKerberos);
+    const latestAfter = latest ? asHistoryPayload(latest.afterState) : null;
     if (
       latest &&
+      latestAfter?.kind === "snapshot" &&
+      changedEntityKeys(latestAfter.plan, entry.beforeState).length === 0 &&
       canCoalesceHistory(
         {
           planId: latest.planId,
           beforeState: asHistoryPayload(latest.beforeState),
-          afterState: asHistoryPayload(latest.afterState),
+          afterState: latestAfter,
         },
         {
           planId: entry.planId,
@@ -639,6 +677,7 @@ export async function pushSnapshotHistory(entry: {
   }
 
   await commitHistoryEntry({
+    actorKerberos: entry.actorKerberos,
     label: entry.label,
     planId: entry.planId,
     beforeState: beforePayload,
@@ -648,12 +687,14 @@ export async function pushSnapshotHistory(entry: {
 
 /** Record a move/resize; one undo step per call (no coalesce). */
 export async function pushGeometryHistory(entry: {
+  actorKerberos: string;
   label: string;
   planId: string;
   before: GeometryPayload;
   after: GeometryPayload;
 }): Promise<void> {
   await commitHistoryEntry({
+    actorKerberos: entry.actorKerberos,
     label: entry.label,
     planId: entry.planId,
     beforeState: entry.before,
@@ -661,17 +702,9 @@ export async function pushGeometryHistory(entry: {
   });
 }
 
-export async function getUndoRedoState(): Promise<UndoRedoState> {
-  const [undoEntry] = await db.query.planHistory.findMany({
-    where: eq(planHistory.undone, false),
-    orderBy: desc(planHistory.id),
-    limit: 1,
-  });
-  const [redoEntry] = await db.query.planHistory.findMany({
-    where: eq(planHistory.undone, true),
-    orderBy: asc(planHistory.id),
-    limit: 1,
-  });
+export async function getUndoRedoState(actorKerberos: string): Promise<UndoRedoState> {
+  const undoEntry = await latestUndoable(actorKerberos);
+  const redoEntry = await earliestRedoable(actorKerberos);
   return {
     canUndo: Boolean(undoEntry),
     canRedo: Boolean(redoEntry),
@@ -765,76 +798,120 @@ export function focusFromHistoryPayloads(
   return { focusTaskIds: [], focusLinkIds: [] };
 }
 
-export async function performUndo(entryId: number): Promise<{
+/** What an undo or redo did, for the canvas and for live updates. */
+export type HistoryStepResult = {
   planId: string | null;
   label: string;
   focusTaskIds: string[];
   focusLinkIds: string[];
-}> {
-  return db.transaction(async (tx) => {
-    const entry = await tx.query.planHistory.findFirst({
-      where: eq(planHistory.id, entryId),
-    });
-    if (!entry) throw new Error("Undo entry no longer exists.");
-    if (entry.undone) throw new Error("That change was already undone.");
+  /** Every plan whose contents the step may have changed. */
+  touchedPlanIds: string[];
+};
 
-    const [latest] = await tx.query.planHistory.findMany({
-      where: eq(planHistory.undone, false),
-      orderBy: desc(planHistory.id),
-      limit: 1,
-    });
-    if (!latest || latest.id !== entryId) {
-      throw new Error("Undo is no longer available — the history stack changed.");
-    }
-
-    const before = asHistoryPayload(entry.beforeState);
-    const after = asHistoryPayload(entry.afterState);
-    if (!before) throw new Error("Undo entry has invalid before state.");
-    const focus = focusFromHistoryPayloads(before, after, "undo");
-    await applyHistoryPayload(tx, before);
-    await tx.update(planHistory).set({ undone: true }).where(eq(planHistory.id, entryId));
-    return {
-      planId: entry.planId,
-      label: entry.label,
-      focusTaskIds: focus.focusTaskIds,
-      focusLinkIds: focus.focusLinkIds,
-    };
-  });
+/** Does the database still look exactly like `expected` for what this entry covers? */
+async function matchesCurrentState(
+  tx: HistoryTx,
+  planId: string | null,
+  expected: HistoryPayload,
+): Promise<boolean> {
+  if (expected.kind === "snapshot") {
+    if (!planId) return false;
+    const current = await snapshotPlan(planId, tx);
+    return current !== null && changedEntityKeys(current, expected.plan).length === 0;
+  }
+  const taskIds = expected.tasks.map((t) => t.id);
+  const linkIds = expected.links.map((l) => l.id);
+  const taskRows = taskIds.length > 0 ? await tx.query.tasks.findMany({ where: inArray(tasks.id, taskIds) }) : [];
+  const linkRows =
+    linkIds.length > 0 ? await tx.query.planLinks.findMany({ where: inArray(planLinks.id, linkIds) }) : [];
+  const pose = (r: GeometryTaskPose | GeometryLinkPose) => JSON.stringify([r.x, r.y, r.width, r.height]);
+  const currentTasks = new Map(taskRows.map((r) => [r.id, pose(r)]));
+  const currentLinks = new Map(linkRows.map((r) => [r.id, pose(r)]));
+  return (
+    expected.tasks.every((t) => currentTasks.get(t.id) === pose(t)) &&
+    expected.links.every((l) => currentLinks.get(l.id) === pose(l))
+  );
 }
 
-export async function performRedo(entryId: number): Promise<{
-  planId: string | null;
-  label: string;
-  focusTaskIds: string[];
-  focusLinkIds: string[];
-}> {
-  return db.transaction(async (tx) => {
-    const entry = await tx.query.planHistory.findFirst({
-      where: eq(planHistory.id, entryId),
-    });
-    if (!entry) throw new Error("Redo entry no longer exists.");
-    if (!entry.undone) throw new Error("That change was already redone.");
-
-    const [earliest] = await tx.query.planHistory.findMany({
-      where: eq(planHistory.undone, true),
-      orderBy: asc(planHistory.id),
-      limit: 1,
-    });
-    if (!earliest || earliest.id !== entryId) {
-      throw new Error("Redo is no longer available — the history stack changed.");
+/** Lock keys for everything a step changes (edges are not lockable). */
+function stepLockKeys(before: HistoryPayload, after: HistoryPayload): LockKey[] {
+  if (before.kind === "snapshot" && after.kind === "snapshot") {
+    const keys: LockKey[] = [];
+    for (const change of changedEntityKeys(before.plan, after.plan)) {
+      if (change.kind === "task") keys.push(taskKey(change.id));
+      else if (change.kind === "link") keys.push(linkKey(change.id));
+      else if (change.kind === "plan") keys.push(planKey(change.id));
     }
+    return keys;
+  }
+  const poses = [before, after].filter((p): p is GeometryPayload => p.kind === "geometry");
+  return [
+    ...new Set(poses.flatMap((p) => [...p.tasks.map((t) => taskKey(t.id)), ...p.links.map((l) => linkKey(l.id))])),
+  ];
+}
+
+function touchedPlanIds(planId: string | null, before: HistoryPayload, after: HistoryPayload): string[] {
+  const ids = new Set<string>(planId ? [planId] : []);
+  for (const payload of [before, after]) {
+    if (payload.kind === "snapshot") for (const id of collectPlanIds(payload.plan)) ids.add(id);
+  }
+  return [...ids];
+}
+
+/**
+ * Apply one of the viewer's own history steps, in `direction`. Refuses if the
+ * affected items are locked by someone else, and refuses (dropping the entry)
+ * if anyone changed them since: applying it would overwrite their work.
+ */
+async function performStep(
+  viewer: Viewer,
+  direction: "undo" | "redo",
+): Promise<HistoryStepResult> {
+  const conflict = await db.transaction(async (tx) => {
+    const entry =
+      direction === "undo"
+        ? await latestUndoable(viewer.kerberos, tx)
+        : await earliestRedoable(viewer.kerberos, tx);
+    if (!entry) throw new Error(direction === "undo" ? "Nothing to undo." : "Nothing to redo.");
 
     const before = asHistoryPayload(entry.beforeState);
     const after = asHistoryPayload(entry.afterState);
-    if (!after) throw new Error("Redo entry has invalid after state.");
-    const focus = focusFromHistoryPayloads(before, after, "redo");
-    await applyHistoryPayload(tx, after);
-    await tx.update(planHistory).set({ undone: false }).where(eq(planHistory.id, entryId));
-    return {
+    if (!before || !after) throw new Error(`History entry ${entry.id} has an invalid payload.`);
+    const [expected, target] = direction === "undo" ? [after, before] : [before, after];
+
+    assertUnlocked(viewer, stepLockKeys(before, after));
+    if (!(await matchesCurrentState(tx, entry.planId, expected))) {
+      await tx.delete(planHistory).where(eq(planHistory.id, entry.id));
+      return entry.label;
+    }
+
+    const focus = focusFromHistoryPayloads(before, after, direction);
+    await applyHistoryPayload(tx, target);
+    await tx
+      .update(planHistory)
+      .set({ undone: direction === "undo" })
+      .where(eq(planHistory.id, entry.id));
+    const result: HistoryStepResult = {
       planId: entry.planId,
       label: entry.label,
       focusTaskIds: focus.focusTaskIds,
       focusLinkIds: focus.focusLinkIds,
+      touchedPlanIds: touchedPlanIds(entry.planId, before, after),
     };
+    return result;
   });
+  if (typeof conflict === "string") {
+    throw new Error(
+      `Can't ${direction} "${conflict}": someone else has changed it since. It was removed from your history.`,
+    );
+  }
+  return conflict;
+}
+
+export async function performUndo(viewer: Viewer): Promise<HistoryStepResult> {
+  return performStep(viewer, "undo");
+}
+
+export async function performRedo(viewer: Viewer): Promise<HistoryStepResult> {
+  return performStep(viewer, "redo");
 }

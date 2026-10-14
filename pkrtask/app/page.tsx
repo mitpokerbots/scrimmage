@@ -63,6 +63,9 @@ function PlanTreeList({ nodes, depth = 0, path = "" }: PlanTreeListProps) {
                       <Tag>
                         {plan.doneCount}/{plan.taskCount} done
                       </Tag>
+                      {plan.visibility === "private" ? (
+                        <Tag className="border-highlight/40 text-highlight">Private</Tag>
+                      ) : null}
                       <Tag>{plan.ownerKerberos}</Tag>
                     </div>
                   </div>
@@ -78,6 +81,34 @@ function PlanTreeList({ nodes, depth = 0, path = "" }: PlanTreeListProps) {
         );
       })}
     </>
+  );
+}
+
+function PlanSection({
+  title,
+  hint,
+  empty,
+  nodes,
+}: {
+  title: string;
+  hint: string;
+  empty: string;
+  nodes: PlanTreeNodeDto[];
+}) {
+  return (
+    <section className="mb-10">
+      <div className="mb-3 flex items-baseline gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">{title}</h2>
+        <span className="text-xs text-ink-muted">{hint}</span>
+      </div>
+      {nodes.length === 0 ? (
+        <Card className="text-sm text-ink-muted">{empty}</Card>
+      ) : (
+        <ul className="flex flex-col gap-3">
+          <PlanTreeList nodes={nodes} />
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -99,15 +130,18 @@ export default async function PlansPage() {
         <CreatePlanForm />
       </div>
 
-      {plans.length === 0 ? (
-        <Card className="text-sm text-ink-muted">
-          No plans yet. Create one above; sub-plans can be added on its canvas.
-        </Card>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          <PlanTreeList nodes={plans} />
-        </ul>
-      )}
+      <PlanSection
+        title="My private plans"
+        hint="Only you can see these."
+        empty="No private plans yet. Choose “Private (only me)” above to make one."
+        nodes={plans.filter((p) => p.visibility === "private")}
+      />
+      <PlanSection
+        title="Shared plans"
+        hint="Everyone on the team can see and edit these."
+        empty="No shared plans yet. Create one above; sub-plans can be added on its canvas."
+        nodes={plans.filter((p) => p.visibility === "shared")}
+      />
     </div>
   );
 }

@@ -8,6 +8,7 @@ function plan(id: string, name = id): PlanSummary {
     name,
     description: "",
     ownerKerberos: "ab",
+    visibility: "shared",
     taskCount: 0,
     doneCount: 0,
   };

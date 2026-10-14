@@ -3,12 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/button";
-import { Input } from "@/components/input";
+import { Input, Select } from "@/components/input";
 import { createPlan } from "../actions";
+import type { PlanVisibility } from "../types";
 
 export function CreatePlanForm() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [visibility, setVisibility] = useState<PlanVisibility>("shared");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,7 +18,7 @@ export function CreatePlanForm() {
     if (!name.trim() || pending) return;
     setPending(true);
     setError(null);
-    const result = await createPlan({ name });
+    const result = await createPlan({ name, visibility });
     setPending(false);
     if (result.ok) {
       router.push(`/plans/${result.data.planId}`);
@@ -40,6 +42,16 @@ export function CreatePlanForm() {
           placeholder="New plan name (e.g. Spring Season)"
           aria-label="Plan name"
         />
+        <div className="w-52 shrink-0">
+          <Select
+            value={visibility}
+            onChange={(e) => setVisibility(e.target.value as PlanVisibility)}
+            aria-label="Who can see it"
+          >
+            <option value="shared">Shared with everyone</option>
+            <option value="private">Private (only me)</option>
+          </Select>
+        </div>
         <Button type="submit" disabled={pending || !name.trim()}>
           {pending ? "Creating…" : "Create plan"}
         </Button>

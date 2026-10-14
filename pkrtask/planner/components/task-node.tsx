@@ -8,7 +8,9 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import { memo, useContext, useEffect } from "react";
+import { memo, useContext, useEffect, type CSSProperties } from "react";
+import { TASK_NODE_HEIGHT, TASK_NODE_WIDTH } from "../plan-focus";
+import { EditingOutline } from "./editing-outline";
 import type { ScenePath } from "../plan-scene";
 import type { TaskDto } from "../types";
 import { FocusTargetButton, useFocusPop } from "./focus-point";
@@ -24,6 +26,9 @@ export type TaskFlowNode = Node<
     startable: boolean;
     focused: boolean;
     onToggleFocus: (taskId: string) => void;
+    dimmed: boolean;
+    /** Someone else is editing this task. */
+    editor: { kerberos: string; name: string } | null;
   },
   "task"
 >;
@@ -89,7 +94,7 @@ function formatDeadline(iso: string): string {
 }
 
 export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps<TaskFlowNode>) {
-  const { task, scale, resizable, path, startable, focused, onToggleFocus } = data;
+  const { task, scale, resizable, path, startable, focused, onToggleFocus, dimmed, editor } = data;
   const { onTaskResize } = useContext(PlanCanvasActionsContext);
   const updateNodeInternals = useUpdateNodeInternals();
   const { rootRef, cardAnimationClass } = useFocusPop(focused);
@@ -105,6 +110,17 @@ export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps
     maxHeight: handlePx,
   };
   const palette = resolveTaskPalette(task.status, startable);
+  // Model size, not the projected view size, so nested frames stay proportional.
+  // Pre-zoom width/height let `zoom` reflow text into the card; handles stay outside this wrapper.
+  const textScale = Math.min(
+    3,
+    Math.max(1, Math.min(task.width / TASK_NODE_WIDTH, task.height / TASK_NODE_HEIGHT)),
+  );
+  const contentStyle: CSSProperties = {
+    zoom: textScale,
+    width: `calc(100% / ${textScale})`,
+    height: `calc(100% / ${textScale})`,
+  };
 
   useEffect(() => {
     updateNodeInternals(id);
@@ -116,7 +132,8 @@ export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps
   const hiddenCount = task.assignees.length - shownAssignees.length;
 
   return (
-    <div ref={rootRef} className="group relative h-full w-full">
+    <div ref={rootRef} className={`group relative h-full w-full${dimmed ? " opacity-25" : ""}`}>
+      {editor ? <EditingOutline editor={editor} scale={scale} radius={6 * scale} /> : null}
       {resizable ? (
         <NodeResizer
           minWidth={minWidth}
@@ -155,7 +172,7 @@ export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps
         }}
       >
         <div
-          className={`h-full w-full rounded-md border px-3 py-2 shadow-md transition-shadow ${
+          className={`h-full w-full rounded-md border shadow-md transition-shadow ${
             selected ? "border-highlight shadow-highlight/20" : ""
           } ${focused ? "focus-point" : ""} ${cardAnimationClass}`}
           style={{
@@ -163,56 +180,60 @@ export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps
             borderColor: selected || focused ? undefined : palette.border,
           }}
         >
-          <div
-            className={`text-sm font-medium ${task.status === "done" ? "line-through" : ""}`}
-            style={{ color: palette.title }}
-          >
-            {task.title}
-          </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            <span
-              className="rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
-              style={{ color: palette.accent, backgroundColor: palette.pillBg }}
-            >
-              {task.status}
-            </span>
-            {task.effort ? (
-              <span
-                className="rounded-full px-1.5 py-px text-[10px] font-semibold"
-                style={{ color: palette.muted, backgroundColor: palette.pillBg }}
+          <div className="h-full w-full overflow-hidden">
+            <div className="box-border overflow-hidden px-3 py-2" style={contentStyle}>
+              <div
+                className={`line-clamp-2 break-words text-sm font-medium ${task.status === "done" ? "line-through" : ""}`}
+                style={{ color: palette.title }}
               >
-                {task.effort}
-              </span>
-            ) : null}
-            {task.deadline ? (
-              <span
-                className={`rounded-full px-1.5 py-px text-[10px] font-semibold ${
-                  overdue ? "bg-status-blocked/20 text-status-blocked" : ""
-                }`}
-                style={
-                  overdue
-                    ? undefined
-                    : { color: palette.muted, backgroundColor: palette.pillBg }
-                }
-              >
-                {overdue ? "overdue " : ""}
-                {formatDeadline(task.deadline)}
-              </span>
-            ) : null}
-            {shownAssignees.map((kerberos) => (
-              <span
-                key={kerberos}
-                className="rounded-full px-1.5 py-px text-[10px] font-semibold text-highlight"
-                style={{ backgroundColor: palette.pillBg }}
-              >
-                {kerberos}
-              </span>
-            ))}
-            {hiddenCount > 0 ? (
-              <span className="text-[10px]" style={{ color: palette.muted }}>
-                +{hiddenCount}
-              </span>
-            ) : null}
+                {task.title}
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1 overflow-hidden">
+                <span
+                  className="rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
+                  style={{ color: palette.accent, backgroundColor: palette.pillBg }}
+                >
+                  {task.status}
+                </span>
+                {task.effort ? (
+                  <span
+                    className="rounded-full px-1.5 py-px text-[10px] font-semibold"
+                    style={{ color: palette.muted, backgroundColor: palette.pillBg }}
+                  >
+                    {task.effort}
+                  </span>
+                ) : null}
+                {task.deadline ? (
+                  <span
+                    className={`rounded-full px-1.5 py-px text-[10px] font-semibold ${
+                      overdue ? "bg-status-blocked/20 text-status-blocked" : ""
+                    }`}
+                    style={
+                      overdue
+                        ? undefined
+                        : { color: palette.muted, backgroundColor: palette.pillBg }
+                    }
+                  >
+                    {overdue ? "overdue " : ""}
+                    {formatDeadline(task.deadline)}
+                  </span>
+                ) : null}
+                {shownAssignees.map((kerberos) => (
+                  <span
+                    key={kerberos}
+                    className="rounded-full px-1.5 py-px text-[10px] font-semibold text-highlight"
+                    style={{ backgroundColor: palette.pillBg }}
+                  >
+                    {kerberos}
+                  </span>
+                ))}
+                {hiddenCount > 0 ? (
+                  <span className="text-[10px]" style={{ color: palette.muted }}>
+                    +{hiddenCount}
+                  </span>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
       </div>

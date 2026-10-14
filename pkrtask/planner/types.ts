@@ -7,6 +7,9 @@ export type TaskEffort = (typeof TASK_EFFORTS)[number];
 export const GRAPH_NODE_KINDS = ["task", "plan_link"] as const;
 export type GraphNodeKind = (typeof GRAPH_NODE_KINDS)[number];
 
+export const PLAN_VISIBILITIES = ["private", "shared"] as const;
+export type PlanVisibility = (typeof PLAN_VISIBILITIES)[number];
+
 /** Task shape shared between server queries and the canvas client. */
 export type TaskDto = {
   id: string;
@@ -43,6 +46,7 @@ export type PlanSummary = {
   name: string;
   description: string;
   ownerKerberos: string;
+  visibility: PlanVisibility;
   taskCount: number;
   doneCount: number;
 };
@@ -53,6 +57,8 @@ export type PlanTreeNodeDto = PlanSummary & {
 };
 
 export type PlanMetaDto = {
+  ownerKerberos: string;
+  visibility: PlanVisibility;
   status: TaskStatus;
   effort: TaskEffort | null;
   deadline: string | null; // ISO

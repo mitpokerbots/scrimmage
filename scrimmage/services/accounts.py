@@ -197,10 +197,6 @@ def all_users(conn: sqlite3.Connection) -> list[Row]:
     ).fetchall()
 
 
-def list_admins(conn: sqlite3.Connection) -> list[Row]:
-    return conn.execute("SELECT * FROM users WHERE is_admin = 1 ORDER BY kerberos").fetchall()
-
-
 def admin_set_user(
     conn: sqlite3.Connection, user_id: int, team_id: int | None, is_admin: bool
 ) -> None:

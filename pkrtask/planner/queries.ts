@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import { edges, planLinks, plans, taskAssignees, tasks } from "@/db/schema";
 import type { Viewer } from "@/lib/auth";
-import { requirePlanAccess } from "./access";
+import { canSee, requirePlanAccess } from "./access";
 import { nestPlans } from "./plan-tree";
 import type {
   EdgeDto,
@@ -17,9 +17,10 @@ import type {
 } from "./types";
 import { computeRecursiveRollup, unionAssignees } from "./plan-scene";
 
-/** Every plan: all admins see everything (see access.ts). */
-export async function listPlans(_viewer: Viewer): Promise<PlanTreeNodeDto[]> {
-  const visiblePlans = await db.query.plans.findMany({ orderBy: asc(plans.createdAt) });
+/** Shared plans and the viewer's own private plans. */
+export async function listPlans(viewer: Viewer): Promise<PlanTreeNodeDto[]> {
+  const allPlans = await db.query.plans.findMany({ orderBy: asc(plans.createdAt) });
+  const visiblePlans = allPlans.filter((plan) => canSee(plan, viewer));
 
   const summaries: PlanSummary[] = [];
   for (const plan of visiblePlans) {
@@ -29,6 +30,7 @@ export async function listPlans(_viewer: Viewer): Promise<PlanTreeNodeDto[]> {
       name: plan.name,
       description: plan.description,
       ownerKerberos: plan.ownerKerberos,
+      visibility: plan.visibility,
       taskCount: planTasks.length,
       doneCount: planTasks.filter((t) => t.status === "done").length,
     });
@@ -71,6 +73,8 @@ export type LoadedPlanBundle = {
 
 function planMetaFromRow(row: PlanRow): PlanMetaDto {
   return {
+    ownerKerberos: row.ownerKerberos,
+    visibility: row.visibility,
     status: row.status as TaskStatus,
     effort: row.effort as TaskEffort | null,
     deadline: row.deadline ? row.deadline.toISOString() : null,
@@ -91,7 +95,8 @@ export function mapTaskRows(taskRows: TaskRow[], assigneesByTask: Map<string, st
     y: t.y,
     width: t.width,
     height: t.height,
-    assignees: assigneesByTask.get(t.id) ?? [],
+    // Sorted so snapshots of the same state compare equal (history.ts).
+    assignees: [...(assigneesByTask.get(t.id) ?? [])].sort(),
   }));
 }
 
@@ -110,7 +115,13 @@ export function mapEdgeRows(edgeRows: EdgeRow[]): EdgeDto[] {
  * Stops expanding child plans below MAX_SUBPLAN_DEPTH; loaded rows at the cap remain available
  * for rollup/assignee derivation even when the tree builder omits nested contents.
  */
-export async function loadPlanSubtree(rootPlanId: string): Promise<Map<string, LoadedPlanBundle>> {
+/** `db`, or an open transaction's `tx`. */
+export type DbExecutor = Pick<typeof db, "query">;
+
+export async function loadPlanSubtree(
+  rootPlanId: string,
+  executor: DbExecutor = db,
+): Promise<Map<string, LoadedPlanBundle>> {
   const bundles = new Map<string, LoadedPlanBundle>();
   let frontier = [rootPlanId];
   let depth = 0;
@@ -122,16 +133,16 @@ export async function loadPlanSubtree(rootPlanId: string): Promise<Map<string, L
     for (const id of batch) loaded.add(id);
 
     const [planRows, taskRows, edgeRows, linkRows] = await Promise.all([
-      db.query.plans.findMany({ where: inArray(plans.id, batch) }),
-      db.query.tasks.findMany({ where: inArray(tasks.planId, batch), orderBy: asc(tasks.createdAt) }),
-      db.query.edges.findMany({ where: inArray(edges.planId, batch) }),
-      db.query.planLinks.findMany({ where: inArray(planLinks.parentPlanId, batch) }),
+      executor.query.plans.findMany({ where: inArray(plans.id, batch) }),
+      executor.query.tasks.findMany({ where: inArray(tasks.planId, batch), orderBy: asc(tasks.createdAt) }),
+      executor.query.edges.findMany({ where: inArray(edges.planId, batch) }),
+      executor.query.planLinks.findMany({ where: inArray(planLinks.parentPlanId, batch) }),
     ]);
 
     const taskIds = taskRows.map((t) => t.id);
     const assigneeRows =
       taskIds.length > 0
-        ? await db.query.taskAssignees.findMany({ where: inArray(taskAssignees.taskId, taskIds) })
+        ? await executor.query.taskAssignees.findMany({ where: inArray(taskAssignees.taskId, taskIds) })
         : [];
 
     const assigneesByTask = new Map<string, string[]>();
@@ -271,7 +282,6 @@ export type PlanGraph = {
     id: string;
     name: string;
     description: string;
-    ownerKerberos: string;
   } & PlanMetaDto & { assignees: string[]; rollup: PlanRollup };
   tasks: TaskDto[];
   edges: EdgeDto[];
@@ -334,32 +344,50 @@ async function parentLinkHasIncompletePrereqs(link: LinkRow): Promise<boolean> {
   return false;
 }
 
-async function checkExternalBlockUpward(planId: string, seen: Set<string>): Promise<boolean> {
+async function checkExternalBlockUpward(
+  planId: string,
+  viewer: Viewer,
+  seen: Set<string>,
+): Promise<boolean> {
   if (seen.has(planId)) return false;
   seen.add(planId);
 
   const parentLinks = await db.query.planLinks.findMany({
     where: eq(planLinks.childPlanId, planId),
   });
+  const parentIds = [...new Set(parentLinks.map((link) => link.parentPlanId))];
+  const parents =
+    parentIds.length > 0 ? await db.query.plans.findMany({ where: inArray(plans.id, parentIds) }) : [];
+  // A shared plan can sit inside someone's private plan; that must not leak.
+  const visibleParentIds = new Set(parents.filter((p) => canSee(p, viewer)).map((p) => p.id));
 
-  for (const link of parentLinks) {
+  for (const link of parentLinks.filter((l) => visibleParentIds.has(l.parentPlanId))) {
     if (await parentLinkHasIncompletePrereqs(link)) return true;
-    if (await checkExternalBlockUpward(link.parentPlanId, seen)) return true;
+    if (await checkExternalBlockUpward(link.parentPlanId, viewer, seen)) return true;
   }
 
   return false;
 }
 
-/** BFS upward: blocked when a parent-plan edge into this plan's link has an incomplete source. */
-export async function planIsExternallyBlocked(planId: string): Promise<boolean> {
-  return checkExternalBlockUpward(planId, new Set());
+/**
+ * Upward search: blocked when a parent-plan edge into this plan's link has an
+ * incomplete source. Only parents the viewer can see count.
+ */
+export async function planIsExternallyBlocked(planId: string, viewer: Viewer): Promise<boolean> {
+  return checkExternalBlockUpward(planId, viewer, new Set());
 }
 
 export async function getPlanGraph(planId: string, viewer: Viewer): Promise<PlanGraph> {
   const plan = await requirePlanAccess(planId, viewer, "read");
-  // Child plans in the subtree load without per-child access checks (same posture as preview).
 
   const rootBundleMap = await loadPlanSubtree(planId);
+  // Shared plans never contain private ones (actions.ts), so this cannot fail
+  // unless that rule was broken; refuse rather than show someone's private plan.
+  for (const bundle of rootBundleMap.values()) {
+    if (!canSee(bundle.plan, viewer)) {
+      throw new Error(`Plan ${planId} contains a private plan its viewer cannot see.`);
+    }
+  }
 
   const rootBundle = rootBundleMap.get(planId);
   if (!rootBundle) {
@@ -368,14 +396,13 @@ export async function getPlanGraph(planId: string, viewer: Viewer): Promise<Plan
 
   const tasks = mapTaskRows(rootBundle.tasks, rootBundle.assigneesByTask);
   const subPlans = buildRootSubPlans(rootBundle, rootBundleMap);
-  const externallyBlocked = await planIsExternallyBlocked(planId);
+  const externallyBlocked = await planIsExternallyBlocked(planId, viewer);
 
   return {
     plan: {
       id: plan.id,
       name: plan.name,
       description: plan.description,
-      ownerKerberos: plan.ownerKerberos,
       ...planMetaFromRow(plan),
       assignees: rootAssignees(tasks, subPlans),
       rollup: rootRollup(tasks, subPlans),

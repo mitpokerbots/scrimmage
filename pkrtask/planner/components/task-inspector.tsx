@@ -31,6 +31,8 @@ type TaskInspectorProps = {
   onSetAssignees: (taskId: string, kerberos: string[]) => void;
   onDelete: (taskId: string) => void;
   onClose: () => void;
+  /** Someone else is editing this task: show it read-only. */
+  lockedBy: string | null;
 };
 
 function toLocalInputValue(iso: string | null): string {
@@ -47,6 +49,7 @@ export function TaskInspector({
   onSetAssignees,
   onDelete,
   onClose,
+  lockedBy,
 }: TaskInspectorProps) {
   const { width, onResizePointerDown } = useResizablePanelWidth("pkrtask-panel-width", 360);
   // Text fields are buffered locally and saved on blur; selects save immediately.
@@ -144,6 +147,14 @@ export function TaskInspector({
         </button>
       </div>
 
+      {lockedBy ? (
+        <p className="rounded-md border border-highlight/40 bg-raised px-3 py-2 text-xs text-highlight">
+          {lockedBy} is editing this task. It will unlock when they’re done.
+        </p>
+      ) : null}
+
+      {/* `contents`: the fieldset only disables its fields; it adds no box. */}
+      <fieldset disabled={lockedBy !== null} className="contents">
       <label className="flex flex-col gap-1 text-xs text-ink-muted">
         Title
         <Input
@@ -350,6 +361,7 @@ export function TaskInspector({
       <Button variant="danger" onClick={() => onDelete(task.id)}>
         Delete task
       </Button>
+      </fieldset>
     </aside>
   );
 }

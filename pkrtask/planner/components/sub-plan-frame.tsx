@@ -5,6 +5,7 @@ import { createContext, memo, useContext } from "react";
 import { FRAME_HEADER_HEIGHT, type ScenePath } from "../plan-scene";
 import type { Rect } from "../plan-focus";
 import type { SubPlanDto } from "../types";
+import { EditingOutline } from "./editing-outline";
 import { FocusTargetButton, useFocusPop } from "./focus-point";
 
 export type PlanCanvasActions = {
@@ -27,6 +28,8 @@ export type SubPlanFrameNode = Node<
     resizable: boolean;
     focused: boolean;
     onToggleFocus: (linkId: string) => void;
+    /** Someone else is editing this sub-plan. */
+    editor: { kerberos: string; name: string } | null;
   },
   "subPlanFrame"
 >;
@@ -51,7 +54,7 @@ function handleSize(scale: number): number {
 }
 
 export const SubPlanFrame = memo(function SubPlanFrame({ data, selected }: NodeProps<SubPlanFrameNode>) {
-  const { subPlan, scale, chromeless, resizable, linkId, path, focused, onToggleFocus } = data;
+  const { subPlan, scale, chromeless, resizable, linkId, path, focused, onToggleFocus, editor } = data;
   const { onFrameResize } = useContext(PlanCanvasActionsContext);
   const { rootRef, cardAnimationClass } = useFocusPop(focused && !chromeless, {
     elevateNode: false,
@@ -85,6 +88,7 @@ export const SubPlanFrame = memo(function SubPlanFrame({ data, selected }: NodeP
 
   return (
     <div ref={rootRef} className="group relative h-full w-full">
+      {editor ? <EditingOutline editor={editor} scale={scale} radius={radius} /> : null}
       {resizable ? (
         <NodeResizer
           minWidth={minWidth}

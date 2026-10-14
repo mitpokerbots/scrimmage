@@ -154,7 +154,7 @@ check "login redirects to Okta with a SAMLRequest" "[[ '$LOC' == https://okta.mi
 step "identity header plumbing (Basic auth standing in for Shibboleth)"
 htpasswd -bc /etc/apache2/test.htpasswd 'alice@mit.edu' pw >/dev/null 2>&1 || {
   apt-get install -yqq apache2-utils >/dev/null; htpasswd -bc /etc/apache2/test.htpasswd 'alice@mit.edu' pw >/dev/null; }
-htpasswd -b /etc/apache2/test.htpasswd 'boss@mit.edu' pw >/dev/null
+htpasswd -b /etc/apache2/test.htpasswd 'bcostin@mit.edu' pw >/dev/null
 /opt/scrimmage/.venv/bin/python - <<'EOF'
 import re
 p = "/etc/apache2/sites-available/scrimmage.conf"
@@ -174,12 +174,10 @@ check "logged in as the authenticated user, not the spoofed one" "echo \"\$PAGE\
 check "display name passed through" "[ \"\$(sqlite3 /srv/scrimmage/db/scrimmage.sqlite3 \"SELECT display_name FROM users WHERE kerberos = 'alice'\")\" = 'Alice Ng' ]"
 check "secure session cookie" "grep -q 'TRUE.*scrimmage_session' /tmp/jar"
 code=$(internal_session_code /tmp/jar)
-check "pkrtask session refuses a non-admin" "[ \"$code\" = 403 ]"
-check "pkrtask hides from a non-admin" "[ \"\$(curl ${H[*]} -o /dev/null -w '%{http_code}' -b /tmp/jar $U/pkrtask)\" = 404 ]"
-curl "${H[@]}" -c /tmp/boss.jar -o /dev/null -u 'boss@mit.edu:pw' "$U/auth/touchstone"
-code=$(internal_session_code /tmp/boss.jar)
-check "pkrtask session for an admin" "[ \"$code\" = 200 ] && grep -q boss /tmp/pkrtask-session"
-check "pkrtask page for an admin" "[ \"\$(curl ${H[*]} -o /dev/null -w '%{http_code}' -b /tmp/boss.jar $U/pkrtask)\" = 200 ]"
+check "pkrtask session reports who is logged in" "[ \"$code\" = 200 ] && grep -q alice /tmp/pkrtask-session"
+check "pkrtask hides from someone not on its roster" "[ \"\$(curl ${H[*]} -o /dev/null -w '%{http_code}' -b /tmp/jar $U/pkrtask)\" = 404 ]"
+curl "${H[@]}" -c /tmp/roster.jar -o /dev/null -u 'bcostin@mit.edu:pw' "$U/auth/touchstone"
+check "pkrtask page for someone on its roster" "[ \"\$(curl ${H[*]} -o /dev/null -w '%{http_code}' -b /tmp/roster.jar $U/pkrtask)\" = 200 ]"
 
 step "result"
 if [ "$FAILED" != 0 ]; then

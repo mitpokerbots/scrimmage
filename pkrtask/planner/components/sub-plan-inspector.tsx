@@ -18,6 +18,10 @@ type SubPlanInspectorProps = {
   onPatch: (childPlanId: string, patch: SubPlanPatch) => void;
   onDelete: (linkId: string) => void;
   onClose: () => void;
+  /** Make this private sub-plan (and private plans inside it) shared. */
+  onShare: (childPlanId: string) => void;
+  /** Someone else is editing this sub-plan: show it read-only. */
+  lockedBy: string | null;
 };
 
 function toLocalInputValue(iso: string | null): string {
@@ -38,6 +42,8 @@ export function SubPlanInspector({
   onPatch,
   onDelete,
   onClose,
+  onShare,
+  lockedBy,
 }: SubPlanInspectorProps) {
   const { width, onResizePointerDown } = useResizablePanelWidth("pkrtask-subplan-panel-width", 360);
   const [name, setName] = useState(subPlan.name);
@@ -85,7 +91,34 @@ export function SubPlanInspector({
           Close
         </button>
       </div>
-      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+      <fieldset
+        disabled={lockedBy !== null}
+        className="flex-1 space-y-4 overflow-y-auto px-4 py-4"
+      >
+        {lockedBy ? (
+          <p className="rounded-md border border-highlight/40 bg-raised px-3 py-2 text-xs text-highlight">
+            {lockedBy} is editing this sub-plan. It will unlock when they’re done.
+          </p>
+        ) : null}
+        {subPlan.visibility === "private" ? (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-line bg-raised px-3 py-2">
+            <span className="text-xs text-ink-muted">Private: only you can see this.</span>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Share this sub-plan, and every private plan inside it, with everyone? This can't be undone.",
+                  )
+                ) {
+                  onShare(subPlan.childPlanId);
+                }
+              }}
+            >
+              Share with everyone
+            </Button>
+          </div>
+        ) : null}
         <label className="block space-y-1">
           <span className="text-xs font-medium text-ink-muted">Name</span>
           <Input
@@ -194,7 +227,7 @@ export function SubPlanInspector({
         >
           Delete sub-plan
         </Button>
-      </div>
+      </fieldset>
     </aside>
   );
 }

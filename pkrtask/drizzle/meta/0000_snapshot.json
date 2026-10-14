@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d3dbe654-74ff-4337-b6e5-6b5241daea31",
+  "id": "80720398-4cec-4cf8-be3f-994d0ef468d9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "edges": {
@@ -99,6 +99,13 @@
           "primaryKey": true,
           "notNull": true,
           "autoincrement": true
+        },
+        "actor_kerberos": {
+          "name": "actor_kerberos",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         },
         "label": {
           "name": "label",
@@ -347,6 +354,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -390,6 +404,10 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
+        "plans_visibility": {
+          "name": "plans_visibility",
+          "value": "visibility IN ('private', 'shared')"
+        },
         "plans_status": {
           "name": "plans_status",
           "value": "status IN ('todo', 'doing', 'done', 'blocked')"

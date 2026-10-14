@@ -19,6 +19,7 @@ const basePlan = (id: string): PlanSnapshot["plan"] => ({
   deadline: null,
   notes: "",
   ownerKerberos: "ab",
+  visibility: "shared",
 });
 
 function snap(overrides: Partial<PlanSnapshot> & { plan: PlanSnapshot["plan"] }): PlanSnapshot {
