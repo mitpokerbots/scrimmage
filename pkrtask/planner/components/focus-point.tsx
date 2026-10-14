@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+
+/** Canvas-wide preferences read by nodes without rebuilding the graph. */
+export const CanvasPrefsContext = createContext({ animateFocus: true });
 
 const POP_DURATION_MS = 900;
 const POP_MIN_DELAY_MS = 5000;
@@ -84,6 +87,7 @@ export function useFocusPop(
 } {
   const elevateNode = options.elevateNode ?? true;
   const motion = options.motion ?? "scale";
+  const animateFocus = useContext(CanvasPrefsContext).animateFocus;
   const rootRef = useRef<HTMLDivElement>(null);
   const [popping, setPopping] = useState(false);
   const reducedMotion = useSyncExternalStore(
@@ -93,7 +97,7 @@ export function useFocusPop(
   );
 
   useEffect(() => {
-    if (!focused) return;
+    if (!focused || !animateFocus) return;
 
     let waitTimer: ReturnType<typeof setTimeout> | undefined;
     let popTimer: ReturnType<typeof setTimeout> | undefined;
@@ -115,7 +119,7 @@ export function useFocusPop(
       if (popTimer !== undefined) clearTimeout(popTimer);
       setPopping(false);
     };
-  }, [focused]);
+  }, [animateFocus, focused]);
 
   const isPopping = focused && popping;
 

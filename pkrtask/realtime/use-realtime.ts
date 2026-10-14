@@ -22,14 +22,13 @@ export type Realtime = {
 };
 
 /**
- * Live collaboration for one open plan page. `onChanged` is called with the
- * ids of plans someone edited (including this viewer, so state converges after
- * every save); the caller decides whether it is showing any of them.
+ * Live collaboration for one open plan page. `onChanged` fires when someone
+ * edits a plan (including this viewer). The caller decides whether to reload.
  */
 export function useRealtime(
   planId: string,
   viewerKerberos: string,
-  onChanged: (planIds: string[]) => void,
+  onChanged: (event: ChangedEvent) => void,
 ): Realtime {
   const [presence, setPresence] = useState<PresenceEvent>({ viewers: [], locks: [] });
   const clientIdRef = useRef<string | null>(null);
@@ -80,7 +79,7 @@ export function useRealtime(
       setPresence(JSON.parse((event as MessageEvent<string>).data) as PresenceEvent);
     });
     source.addEventListener("changed", (event) => {
-      onChangedRef.current((JSON.parse((event as MessageEvent<string>).data) as ChangedEvent).planIds);
+      onChangedRef.current(JSON.parse((event as MessageEvent<string>).data) as ChangedEvent);
     });
     const renew = window.setInterval(() => {
       if (wantedRef.current.length > 0) void sendClaims();

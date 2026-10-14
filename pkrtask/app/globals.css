@@ -49,9 +49,8 @@ body {
 
 /* Focus points — persistent glow + dramatic pop on focused tasks and sub-plans */
 .focus-point {
-  box-shadow:
-    0 0 0 2px var(--color-highlight),
-    0 0 14px 3px color-mix(in srgb, var(--color-highlight) 50%, transparent);
+  outline: 2px solid var(--color-highlight);
+  outline-offset: 1px;
 }
 
 @keyframes focus-point-pop {

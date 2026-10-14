@@ -116,11 +116,15 @@ export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps
     3,
     Math.max(1, Math.min(task.width / TASK_NODE_WIDTH, task.height / TASK_NODE_HEIGHT)),
   );
-  const contentStyle: CSSProperties = {
-    zoom: textScale,
-    width: `calc(100% / ${textScale})`,
-    height: `calc(100% / ${textScale})`,
-  };
+  // `zoom` forces extra layout work on every card. Default-sized tasks skip it.
+  const contentStyle: CSSProperties =
+    textScale === 1
+      ? { width: "100%", height: "100%" }
+      : {
+          zoom: textScale,
+          width: `calc(100% / ${textScale})`,
+          height: `calc(100% / ${textScale})`,
+        };
 
   useEffect(() => {
     updateNodeInternals(id);
@@ -134,7 +138,7 @@ export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps
   return (
     <div ref={rootRef} className={`group relative h-full w-full${dimmed ? " opacity-25" : ""}`}>
       {editor ? <EditingOutline editor={editor} scale={scale} radius={6 * scale} /> : null}
-      {resizable ? (
+      {resizable && selected ? (
         <NodeResizer
           minWidth={minWidth}
           minHeight={minHeight}
@@ -172,7 +176,7 @@ export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps
         }}
       >
         <div
-          className={`h-full w-full rounded-md border shadow-md transition-shadow ${
+          className={`h-full w-full rounded-md border shadow-md ${
             selected ? "border-highlight shadow-highlight/20" : ""
           } ${focused ? "focus-point" : ""} ${cardAnimationClass}`}
           style={{

@@ -22,23 +22,37 @@ export async function listPlans(viewer: Viewer): Promise<PlanTreeNodeDto[]> {
   const allPlans = await db.query.plans.findMany({ orderBy: asc(plans.createdAt) });
   const visiblePlans = allPlans.filter((plan) => canSee(plan, viewer));
 
-  const summaries: PlanSummary[] = [];
-  for (const plan of visiblePlans) {
-    const planTasks = await db.query.tasks.findMany({ where: eq(tasks.planId, plan.id) });
-    summaries.push({
+  const visibleIds = visiblePlans.map((plan) => plan.id);
+  const taskRows =
+    visibleIds.length > 0
+      ? await db.query.tasks.findMany({
+          where: inArray(tasks.planId, visibleIds),
+          columns: { planId: true, status: true },
+        })
+      : [];
+  const counts = new Map<string, { taskCount: number; doneCount: number }>();
+  for (const row of taskRows) {
+    const count = counts.get(row.planId) ?? { taskCount: 0, doneCount: 0 };
+    count.taskCount += 1;
+    if (row.status === "done") count.doneCount += 1;
+    counts.set(row.planId, count);
+  }
+
+  const summaries: PlanSummary[] = visiblePlans.map((plan) => {
+    const count = counts.get(plan.id) ?? { taskCount: 0, doneCount: 0 };
+    return {
       id: plan.id,
       name: plan.name,
       description: plan.description,
       ownerKerberos: plan.ownerKerberos,
       visibility: plan.visibility,
-      taskCount: planTasks.length,
-      doneCount: planTasks.filter((t) => t.status === "done").length,
-    });
-  }
+      taskCount: count.taskCount,
+      doneCount: count.doneCount,
+    };
+  });
 
   if (summaries.length === 0) return [];
 
-  const visibleIds = summaries.map((s) => s.id);
   const visibleLinks = await db.query.planLinks.findMany({
     where: and(
       inArray(planLinks.parentPlanId, visibleIds),

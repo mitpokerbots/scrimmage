@@ -32,18 +32,42 @@ function requiredEnv(name: string): string {
   return value.replace(/\/+$/, "");
 }
 
+/**
+ * A burst of edits (drag, then the undo-label refresh) would otherwise ask
+ * Flask who you are on every call. Members are cached briefly; a failed check
+ * is not, so logging in again works on the next request.
+ */
+const SESSION_CACHE_TTL_MS = 5_000;
+const sessionCache = new Map<string, { at: number; session: Session }>();
+
 /** Who is logged into scrimmage, given the browser's Cookie header. */
 export async function sessionForCookie(cookie: string): Promise<Session> {
+  const now = Date.now();
+  const cached = sessionCache.get(cookie);
+  if (cached && now - cached.at < SESSION_CACHE_TTL_MS) return cached.session;
+
   const url = `${requiredEnv("SCRIMMAGE_INTERNAL_URL")}/api/pkrtask/session`;
   const response = await fetch(url, { headers: { cookie }, cache: "no-store", redirect: "manual" });
-  if (response.status === 401) return { status: "logged-out" };
+  if (response.status === 401) {
+    sessionCache.delete(cookie);
+    return { status: "logged-out" };
+  }
   if (response.status !== 200) {
     throw new Error(`Scrimmage session check at ${url} returned HTTP ${response.status}.`);
   }
   const { viewer } = sessionSchema.parse(await response.json());
   const member = ROSTER.find((p) => p.kerberos === viewer.kerberos);
-  if (!member) return { status: "not-member" };
-  return { status: "member", viewer: { kerberos: member.kerberos, name: member.name } };
+  if (!member) {
+    sessionCache.delete(cookie);
+    return { status: "not-member" };
+  }
+  const session: Session = { status: "member", viewer: { kerberos: member.kerberos, name: member.name } };
+  sessionCache.set(cookie, { at: now, session });
+  if (sessionCache.size > 32) {
+    const oldest = sessionCache.keys().next().value;
+    if (oldest !== undefined) sessionCache.delete(oldest);
+  }
+  return session;
 }
 
 /** One lookup per request, shared by the page and everything it renders. */

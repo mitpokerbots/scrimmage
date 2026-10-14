@@ -40,7 +40,7 @@ export function OrganizeBar({
 
   return (
     <div
-      className="absolute bottom-12 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-line bg-surface/95 px-3 py-2 shadow-lg backdrop-blur"
+      className="absolute bottom-12 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 shadow-lg"
       role="toolbar"
       aria-label="Organize selection"
     >

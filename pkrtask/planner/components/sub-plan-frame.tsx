@@ -89,7 +89,7 @@ export const SubPlanFrame = memo(function SubPlanFrame({ data, selected }: NodeP
   return (
     <div ref={rootRef} className="group relative h-full w-full">
       {editor ? <EditingOutline editor={editor} scale={scale} radius={radius} /> : null}
-      {resizable ? (
+      {resizable && selected ? (
         <NodeResizer
           minWidth={minWidth}
           minHeight={minHeight}
@@ -119,7 +119,7 @@ export const SubPlanFrame = memo(function SubPlanFrame({ data, selected }: NodeP
         labelRemove="Remove sub-plan focus point"
       />
       <div
-        className={`h-full w-full overflow-hidden border bg-surface/40 transition-shadow ${
+        className={`h-full w-full overflow-hidden border bg-surface/40 ${
           selected || focused ? "border-highlight" : "border-line"
         } ${focused ? "focus-point" : ""} ${cardAnimationClass}`}
         style={{ borderRadius: radius }}

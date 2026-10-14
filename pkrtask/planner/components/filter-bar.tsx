@@ -89,7 +89,7 @@ export function FilterBar({ filters, people, matchedCount, totalCount, onChange 
 
   return (
     <div
-      className="nodrag nopan nowheel flex max-w-[min(46rem,calc(100vw-24rem))] flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-line bg-surface/90 px-2 py-1 text-xs text-ink-muted backdrop-blur"
+      className="nodrag nopan nowheel flex max-w-[min(46rem,calc(100vw-24rem))] flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink-muted"
       role="group"
       aria-label="Task filters"
     >

@@ -7,6 +7,7 @@ import {
   MarkerType,
   MiniMap,
   PanOnScrollMode,
+  SelectionMode,
   getViewportForBounds,
   ReactFlow,
   ReactFlowProvider,
@@ -57,6 +58,7 @@ import {
   applyExternalBlock,
   refitVisibleFrameContents,
   unionAssignees,
+  sceneTaskId,
   visibleSceneIds,
   type Scene,
   type SceneFrame,
@@ -79,14 +81,23 @@ import type { PlanGraph } from "../queries";
 import { EMPTY_FILTERS, taskMatchesFilters, type TaskFilters } from "../task-filters";
 import type { Person } from "@/lib/auth";
 import type { EdgeDto, GraphNodeKind, SubPlanDto, TaskDto } from "../types";
+import {
+  DEFAULT_CANVAS_SETTINGS,
+  panScrollSpeed,
+  readCanvasSettings,
+  writeCanvasSettings,
+  type CanvasSettings,
+} from "../canvas-settings";
+import { CanvasSettingsPanel } from "./canvas-settings-panel";
 import { FilterBar, readStoredFilters, writeStoredFilters } from "./filter-bar";
 import { editorColor } from "./editing-outline";
-import type { LockKey, LockView } from "@/realtime/protocol";
+import type { ChangedEvent, LockKey, LockView } from "@/realtime/protocol";
 import { useRealtime } from "@/realtime/use-realtime";
 import { OrganizeBar, type OrganizeDestination } from "./organize-bar";
 import { SubPlanFrame, type SubPlanFrameNode, PlanCanvasActionsContext } from "./sub-plan-frame";
 import { SubPlanInspector, type SubPlanPatch } from "./sub-plan-inspector";
 import { TaskInspector, type TaskPatch } from "./task-inspector";
+import { CanvasPrefsContext } from "./focus-point";
 import { TaskNode, type TaskFlowNode } from "./task-node";
 import { useFocusPoints } from "./use-focus-points";
 
@@ -97,30 +108,27 @@ const nodeTypes = { task: TaskNode, subPlanFrame: SubPlanFrame };
 const MIN_ZOOM = 0.02;
 const DEFAULT_MAX_ZOOM = 8;
 const ABSOLUTE_MAX_ZOOM = 64;
-const PAN_SPEED_KEY = "pkrtask-pan-speed";
-const STARTABLE_ONLY_KEY = "pkrtask.canvas.startableOnly";
-const DEFAULT_PAN_SPEED = 0.5;
-
-function readPanSpeed(): number {
-  if (typeof window === "undefined") return DEFAULT_PAN_SPEED;
-  const raw = window.localStorage.getItem(PAN_SPEED_KEY);
-  if (!raw) return DEFAULT_PAN_SPEED;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return DEFAULT_PAN_SPEED;
-  return Math.min(1.5, Math.max(0.1, n));
-}
-
-function readStartableOnly(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(STARTABLE_ONLY_KEY) === "true";
-}
-
-function cloneGraph(graph: PlanGraph): PlanGraph {
-  return structuredClone(graph);
-}
-
 function pathsEqual(a: ScenePath, b: ScenePath): boolean {
   return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
+function assigneesEqual(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((kerberos, i) => kerberos === b[i]);
+}
+
+function rollupEqual(a: { total: number; done: number; blocked: number; nearestDeadline: string | null }, b: typeof a): boolean {
+  return a.total === b.total && a.done === b.done && a.blocked === b.blocked && a.nearestDeadline === b.nearestDeadline;
+}
+
+/** Keep the same array when every item comes back unchanged, so untouched branches stay referentially equal. */
+function mapIfChanged<T>(items: readonly T[], map: (item: T) => T): T[] {
+  let changed = false;
+  const next = items.map((item) => {
+    const mapped = map(item);
+    if (mapped !== item) changed = true;
+    return mapped;
+  });
+  return changed ? next : (items as T[]);
 }
 
 function pathStartsWith(path: ScenePath, prefix: ScenePath): boolean {
@@ -128,27 +136,36 @@ function pathStartsWith(path: ScenePath, prefix: ScenePath): boolean {
   return prefix.every((id, i) => path[i] === id);
 }
 
+function patchTaskList(tasks: TaskDto[], taskId: string, patch: Partial<TaskDto>): TaskDto[] {
+  const index = tasks.findIndex((t) => t.id === taskId);
+  if (index < 0) return tasks;
+  const next = tasks.slice();
+  next[index] = { ...tasks[index]!, ...patch };
+  return next;
+}
+
 function patchTasksInSubPlans(
   subPlans: SubPlanDto[],
   taskId: string,
   patch: Partial<TaskDto>,
 ): SubPlanDto[] {
-  return subPlans.map((sp) => ({
-    ...sp,
-    tasks: sp.tasks.map((t) => (t.id === taskId ? { ...t, ...patch } : t)),
-    subPlans: patchTasksInSubPlans(sp.subPlans, taskId, patch),
-  }));
+  return mapIfChanged(subPlans, (sp) => {
+    const tasks = patchTaskList(sp.tasks, taskId, patch);
+    const nested = patchTasksInSubPlans(sp.subPlans, taskId, patch);
+    if (tasks === sp.tasks && nested === sp.subPlans) return sp;
+    return { ...sp, tasks, subPlans: nested };
+  });
 }
 
 function patchTaskEverywhere(graph: PlanGraph, taskId: string, patch: Partial<TaskDto>): PlanGraph {
-  const next = cloneGraph(graph);
-  next.tasks = next.tasks.map((t) => (t.id === taskId ? { ...t, ...patch } : t));
-  next.subPlans = patchTasksInSubPlans(next.subPlans, taskId, patch);
-  return recomputeGraphDerived(next);
+  const tasks = patchTaskList(graph.tasks, taskId, patch);
+  const subPlans = patchTasksInSubPlans(graph.subPlans, taskId, patch);
+  if (tasks === graph.tasks && subPlans === graph.subPlans) return graph;
+  return recomputeGraphDerived({ ...graph, tasks, subPlans });
 }
 
 function recomputeSubPlanDerived(subPlans: SubPlanDto[]): SubPlanDto[] {
-  return subPlans.map((sp) => {
+  return mapIfChanged(subPlans, (sp) => {
     const nested = recomputeSubPlanDerived(sp.subPlans);
     const rollup = computeRecursiveRollup(
       sp.tasks.map((t) => ({ status: t.status, deadline: t.deadline })),
@@ -158,22 +175,30 @@ function recomputeSubPlanDerived(subPlans: SubPlanDto[]): SubPlanDto[] {
       sp.tasks.map((t) => t.assignees),
       nested.map((s) => s.assignees),
     );
+    if (nested === sp.subPlans && rollupEqual(rollup, sp.rollup) && assigneesEqual(assignees, sp.assignees)) {
+      return sp;
+    }
     return { ...sp, subPlans: nested, rollup, assignees };
   });
 }
 
 function recomputeGraphDerived(graph: PlanGraph): PlanGraph {
-  const next = cloneGraph(graph);
-  next.subPlans = recomputeSubPlanDerived(next.subPlans);
-  next.plan.assignees = unionAssignees(
-    next.tasks.map((t) => t.assignees),
-    next.subPlans.map((sp) => sp.assignees),
+  const subPlans = recomputeSubPlanDerived(graph.subPlans);
+  const assignees = unionAssignees(
+    graph.tasks.map((t) => t.assignees),
+    subPlans.map((sp) => sp.assignees),
   );
-  next.plan.rollup = computeRecursiveRollup(
-    next.tasks.map((t) => ({ status: t.status, deadline: t.deadline })),
-    next.subPlans.map((sp) => sp.rollup),
+  const rollup = computeRecursiveRollup(
+    graph.tasks.map((t) => ({ status: t.status, deadline: t.deadline })),
+    subPlans.map((sp) => sp.rollup),
   );
-  return next;
+  const planSame = assigneesEqual(assignees, graph.plan.assignees) && rollupEqual(rollup, graph.plan.rollup);
+  if (subPlans === graph.subPlans && planSame) return graph;
+  return {
+    ...graph,
+    subPlans,
+    plan: planSame ? graph.plan : { ...graph.plan, assignees, rollup },
+  };
 }
 
 function patchSubPlanMetaByChildId(
@@ -181,18 +206,27 @@ function patchSubPlanMetaByChildId(
   childPlanId: string,
   patch: SubPlanPatch,
 ): SubPlanDto[] {
-  return subPlans.map((sp) => {
-    const updated = sp.childPlanId === childPlanId ? { ...sp, ...patch } : sp;
-    return { ...updated, subPlans: patchSubPlanMetaByChildId(updated.subPlans, childPlanId, patch) };
+  return mapIfChanged(subPlans, (sp) => {
+    const nested = patchSubPlanMetaByChildId(sp.subPlans, childPlanId, patch);
+    if (sp.childPlanId !== childPlanId && nested === sp.subPlans) return sp;
+    return { ...(sp.childPlanId === childPlanId ? { ...sp, ...patch } : sp), subPlans: nested };
   });
 }
 
 function patchPlanMetaEverywhere(graph: PlanGraph, childPlanId: string, patch: SubPlanPatch): PlanGraph {
-  const next = cloneGraph(graph);
-  if (next.plan.id === childPlanId) {
-    Object.assign(next.plan, patch);
-  }
-  next.subPlans = patchSubPlanMetaByChildId(next.subPlans, childPlanId, patch);
+  const plan = graph.plan.id === childPlanId ? { ...graph.plan, ...patch } : graph.plan;
+  const subPlans = patchSubPlanMetaByChildId(graph.subPlans, childPlanId, patch);
+  if (plan === graph.plan && subPlans === graph.subPlans) return graph;
+  return { ...graph, plan, subPlans };
+}
+
+function moveTaskList(tasks: TaskDto[], taskId: string, x: number, y: number): TaskDto[] {
+  const index = tasks.findIndex((t) => t.id === taskId);
+  if (index < 0) return tasks;
+  const current = tasks[index]!;
+  if (current.x === x && current.y === y) return tasks;
+  const next = tasks.slice();
+  next[index] = { ...current, x, y };
   return next;
 }
 
@@ -203,12 +237,11 @@ function updateTaskPosInSubPlans(
   x: number,
   y: number,
 ): SubPlanDto[] {
-  return subPlans.map((sp) => {
-    let tasks = sp.tasks;
-    if (sp.childPlanId === planId) {
-      tasks = sp.tasks.map((t) => (t.id === taskId ? { ...t, x, y } : t));
-    }
-    return { ...sp, tasks, subPlans: updateTaskPosInSubPlans(sp.subPlans, taskId, planId, x, y) };
+  return mapIfChanged(subPlans, (sp) => {
+    const tasks = sp.childPlanId === planId ? moveTaskList(sp.tasks, taskId, x, y) : sp.tasks;
+    const nested = updateTaskPosInSubPlans(sp.subPlans, taskId, planId, x, y);
+    if (tasks === sp.tasks && nested === sp.subPlans) return sp;
+    return { ...sp, tasks, subPlans: nested };
   });
 }
 
@@ -219,12 +252,10 @@ function updateTaskPositionEverywhere(
   x: number,
   y: number,
 ): PlanGraph {
-  const next = cloneGraph(graph);
-  if (planId === next.plan.id) {
-    next.tasks = next.tasks.map((t) => (t.id === taskId ? { ...t, x, y } : t));
-  }
-  next.subPlans = updateTaskPosInSubPlans(next.subPlans, taskId, planId, x, y);
-  return next;
+  const tasks = planId === graph.plan.id ? moveTaskList(graph.tasks, taskId, x, y) : graph.tasks;
+  const subPlans = updateTaskPosInSubPlans(graph.subPlans, taskId, planId, x, y);
+  if (tasks === graph.tasks && subPlans === graph.subPlans) return graph;
+  return { ...graph, tasks, subPlans };
 }
 
 function updateFrameByLinkId(
@@ -232,9 +263,10 @@ function updateFrameByLinkId(
   linkId: string,
   patch: Partial<Pick<SubPlanDto, "x" | "y" | "width" | "height">>,
 ): SubPlanDto[] {
-  return subPlans.map((sp) => {
-    const updated = sp.linkId === linkId ? { ...sp, ...patch } : sp;
-    return { ...updated, subPlans: updateFrameByLinkId(updated.subPlans, linkId, patch) };
+  return mapIfChanged(subPlans, (sp) => {
+    const nested = updateFrameByLinkId(sp.subPlans, linkId, patch);
+    if (sp.linkId !== linkId && nested === sp.subPlans) return sp;
+    return { ...(sp.linkId === linkId ? { ...sp, ...patch } : sp), subPlans: nested };
   });
 }
 
@@ -243,27 +275,30 @@ function updateFrameEverywhere(
   linkId: string,
   patch: Partial<Pick<SubPlanDto, "x" | "y" | "width" | "height">>,
 ): PlanGraph {
-  const next = cloneGraph(graph);
-  next.subPlans = updateFrameByLinkId(next.subPlans, linkId, patch);
-  return next;
+  const subPlans = updateFrameByLinkId(graph.subPlans, linkId, patch);
+  if (subPlans === graph.subPlans) return graph;
+  return { ...graph, subPlans };
 }
 
 function insertTaskIntoSubPlans(subPlans: SubPlanDto[], planId: string, task: TaskDto): SubPlanDto[] {
-  return subPlans.map((sp) => {
-    let tasks = sp.tasks;
-    if (sp.childPlanId === planId) tasks = [...sp.tasks, task];
-    return { ...sp, tasks, subPlans: insertTaskIntoSubPlans(sp.subPlans, planId, task) };
+  return mapIfChanged(subPlans, (sp) => {
+    const nested = insertTaskIntoSubPlans(sp.subPlans, planId, task);
+    if (sp.childPlanId !== planId && nested === sp.subPlans) return sp;
+    return {
+      ...sp,
+      tasks: sp.childPlanId === planId ? [...sp.tasks, task] : sp.tasks,
+      subPlans: nested,
+    };
   });
 }
 
 function insertTaskIntoPlan(graph: PlanGraph, planId: string, task: TaskDto): PlanGraph {
-  const next = cloneGraph(graph);
-  if (planId === next.plan.id) {
-    next.tasks = [...next.tasks, task];
-  } else {
-    next.subPlans = insertTaskIntoSubPlans(next.subPlans, planId, task);
+  if (planId === graph.plan.id) {
+    return recomputeGraphDerived({ ...graph, tasks: [...graph.tasks, task] });
   }
-  return recomputeGraphDerived(next);
+  const subPlans = insertTaskIntoSubPlans(graph.subPlans, planId, task);
+  if (subPlans === graph.subPlans) return graph;
+  return recomputeGraphDerived({ ...graph, subPlans });
 }
 
 function insertSubPlanIntoSubPlans(
@@ -271,10 +306,14 @@ function insertSubPlanIntoSubPlans(
   parentPlanId: string,
   subPlan: SubPlanDto,
 ): SubPlanDto[] {
-  return subPlans.map((sp) => {
-    let nested = sp.subPlans;
-    if (sp.childPlanId === parentPlanId) nested = [...sp.subPlans, subPlan];
-    return { ...sp, subPlans: insertSubPlanIntoSubPlans(nested, parentPlanId, subPlan) };
+  return mapIfChanged(subPlans, (sp) => {
+    const nested = insertSubPlanIntoSubPlans(sp.subPlans, parentPlanId, subPlan);
+    if (sp.childPlanId !== parentPlanId && nested === sp.subPlans) return sp;
+    const base = nested === sp.subPlans ? sp.subPlans : nested;
+    return {
+      ...sp,
+      subPlans: sp.childPlanId === parentPlanId ? [...base, subPlan] : base,
+    };
   });
 }
 
@@ -330,88 +369,99 @@ function frameEditor(locks: ReadonlyMap<LockKey, LockView>, frame: SceneFrame): 
 }
 
 function insertSubPlanIntoPlan(graph: PlanGraph, parentPlanId: string, subPlan: SubPlanDto): PlanGraph {
-  const next = cloneGraph(graph);
-  if (parentPlanId === next.plan.id) {
-    next.subPlans = [...next.subPlans, subPlan];
-  } else {
-    next.subPlans = insertSubPlanIntoSubPlans(next.subPlans, parentPlanId, subPlan);
+  if (parentPlanId === graph.plan.id) {
+    return { ...graph, subPlans: [...graph.subPlans, subPlan] };
   }
-  return next;
+  const subPlans = insertSubPlanIntoSubPlans(graph.subPlans, parentPlanId, subPlan);
+  if (subPlans === graph.subPlans) return graph;
+  return { ...graph, subPlans };
 }
 
 function removeTaskFromSubPlans(subPlans: SubPlanDto[], taskId: string): SubPlanDto[] {
-  return subPlans.map((sp) => ({
-    ...sp,
-    tasks: sp.tasks.filter((t) => t.id !== taskId),
-    edges: sp.edges.filter((e) => e.fromId !== taskId && e.toId !== taskId),
-    subPlans: removeTaskFromSubPlans(sp.subPlans, taskId),
-  }));
+  return mapIfChanged(subPlans, (sp) => {
+    const tasks = sp.tasks.some((t) => t.id === taskId) ? sp.tasks.filter((t) => t.id !== taskId) : sp.tasks;
+    const edges = sp.edges.some((e) => e.fromId === taskId || e.toId === taskId)
+      ? sp.edges.filter((e) => e.fromId !== taskId && e.toId !== taskId)
+      : sp.edges;
+    const nested = removeTaskFromSubPlans(sp.subPlans, taskId);
+    if (tasks === sp.tasks && edges === sp.edges && nested === sp.subPlans) return sp;
+    return { ...sp, tasks, edges, subPlans: nested };
+  });
 }
 
 function removeTaskEverywhere(graph: PlanGraph, taskId: string): PlanGraph {
-  const next = cloneGraph(graph);
-  next.tasks = next.tasks.filter((t) => t.id !== taskId);
-  next.edges = next.edges.filter((e) => e.fromId !== taskId && e.toId !== taskId);
-  next.subPlans = removeTaskFromSubPlans(next.subPlans, taskId);
-  return recomputeGraphDerived(next);
+  const tasks = graph.tasks.some((t) => t.id === taskId) ? graph.tasks.filter((t) => t.id !== taskId) : graph.tasks;
+  const edges = graph.edges.some((e) => e.fromId === taskId || e.toId === taskId)
+    ? graph.edges.filter((e) => e.fromId !== taskId && e.toId !== taskId)
+    : graph.edges;
+  const subPlans = removeTaskFromSubPlans(graph.subPlans, taskId);
+  if (tasks === graph.tasks && edges === graph.edges && subPlans === graph.subPlans) return graph;
+  return recomputeGraphDerived({ ...graph, tasks, edges, subPlans });
 }
 
 function removeSubPlanByLinkId(subPlans: SubPlanDto[], linkId: string): SubPlanDto[] {
-  return subPlans
-    .filter((sp) => sp.linkId !== linkId)
-    .map((sp) => ({
-      ...sp,
-      subPlans: removeSubPlanByLinkId(sp.subPlans, linkId),
-    }));
+  const removed = subPlans.some((sp) => sp.linkId === linkId);
+  const kept = removed ? subPlans.filter((sp) => sp.linkId !== linkId) : subPlans;
+  return mapIfChanged(kept, (sp) => {
+    const nested = removeSubPlanByLinkId(sp.subPlans, linkId);
+    if (nested === sp.subPlans) return sp;
+    return { ...sp, subPlans: nested };
+  });
 }
 
 function removeEdgesTouchingLinkInSubPlans(subPlans: SubPlanDto[], linkId: string): SubPlanDto[] {
-  return subPlans.map((sp) => ({
-    ...sp,
-    edges: sp.edges.filter((e) => e.fromId !== linkId && e.toId !== linkId),
-    subPlans: removeEdgesTouchingLinkInSubPlans(sp.subPlans, linkId),
-  }));
+  return mapIfChanged(subPlans, (sp) => {
+    const edges = sp.edges.some((e) => e.fromId === linkId || e.toId === linkId)
+      ? sp.edges.filter((e) => e.fromId !== linkId && e.toId !== linkId)
+      : sp.edges;
+    const nested = removeEdgesTouchingLinkInSubPlans(sp.subPlans, linkId);
+    if (edges === sp.edges && nested === sp.subPlans) return sp;
+    return { ...sp, edges, subPlans: nested };
+  });
 }
 
 function removeSubPlanEverywhere(graph: PlanGraph, linkId: string): PlanGraph {
-  const next = cloneGraph(graph);
-  next.subPlans = removeSubPlanByLinkId(next.subPlans, linkId);
-  next.edges = next.edges.filter((e) => e.fromId !== linkId && e.toId !== linkId);
-  next.subPlans = removeEdgesTouchingLinkInSubPlans(next.subPlans, linkId);
-  return recomputeGraphDerived(next);
+  const subPlans = removeEdgesTouchingLinkInSubPlans(removeSubPlanByLinkId(graph.subPlans, linkId), linkId);
+  const edges = graph.edges.some((e) => e.fromId === linkId || e.toId === linkId)
+    ? graph.edges.filter((e) => e.fromId !== linkId && e.toId !== linkId)
+    : graph.edges;
+  if (subPlans === graph.subPlans && edges === graph.edges) return graph;
+  return recomputeGraphDerived({ ...graph, subPlans, edges });
 }
 
 function addEdgeInSubPlans(subPlans: SubPlanDto[], planId: string, edge: EdgeDto): SubPlanDto[] {
-  return subPlans.map((sp) => {
-    let edges = sp.edges;
-    if (sp.childPlanId === planId) edges = [...sp.edges, edge];
-    return { ...sp, edges, subPlans: addEdgeInSubPlans(sp.subPlans, planId, edge) };
+  return mapIfChanged(subPlans, (sp) => {
+    const nested = addEdgeInSubPlans(sp.subPlans, planId, edge);
+    if (sp.childPlanId !== planId && nested === sp.subPlans) return sp;
+    return {
+      ...sp,
+      edges: sp.childPlanId === planId ? [...sp.edges, edge] : sp.edges,
+      subPlans: nested,
+    };
   });
 }
 
 function addEdgeEverywhere(graph: PlanGraph, planId: string, edge: EdgeDto): PlanGraph {
-  const next = cloneGraph(graph);
-  if (planId === next.plan.id) {
-    next.edges = [...next.edges, edge];
-  } else {
-    next.subPlans = addEdgeInSubPlans(next.subPlans, planId, edge);
-  }
-  return next;
+  if (planId === graph.plan.id) return { ...graph, edges: [...graph.edges, edge] };
+  const subPlans = addEdgeInSubPlans(graph.subPlans, planId, edge);
+  if (subPlans === graph.subPlans) return graph;
+  return { ...graph, subPlans };
 }
 
 function removeEdgeInSubPlans(subPlans: SubPlanDto[], edgeId: string): SubPlanDto[] {
-  return subPlans.map((sp) => ({
-    ...sp,
-    edges: sp.edges.filter((e) => e.id !== edgeId),
-    subPlans: removeEdgeInSubPlans(sp.subPlans, edgeId),
-  }));
+  return mapIfChanged(subPlans, (sp) => {
+    const edges = sp.edges.some((e) => e.id === edgeId) ? sp.edges.filter((e) => e.id !== edgeId) : sp.edges;
+    const nested = removeEdgeInSubPlans(sp.subPlans, edgeId);
+    if (edges === sp.edges && nested === sp.subPlans) return sp;
+    return { ...sp, edges, subPlans: nested };
+  });
 }
 
 function removeEdgeEverywhere(graph: PlanGraph, edgeId: string): PlanGraph {
-  const next = cloneGraph(graph);
-  next.edges = next.edges.filter((e) => e.id !== edgeId);
-  next.subPlans = removeEdgeInSubPlans(next.subPlans, edgeId);
-  return next;
+  const edges = graph.edges.some((e) => e.id === edgeId) ? graph.edges.filter((e) => e.id !== edgeId) : graph.edges;
+  const subPlans = removeEdgeInSubPlans(graph.subPlans, edgeId);
+  if (edges === graph.edges && subPlans === graph.subPlans) return graph;
+  return { ...graph, edges, subPlans };
 }
 
 function resolveFocusPath(focusParam: string | null | undefined, graph: PlanGraph): ScenePath {
@@ -706,30 +756,154 @@ function sizesMatch(a: { w: number; h: number }, b: { w: number; h: number }): b
   return Math.abs(a.w - b.w) < SIZE_EPSILON && Math.abs(a.h - b.h) < SIZE_EPSILON;
 }
 
-function mergeFlowNodes(built: FlowNode[], prev: FlowNode[]): FlowNode[] {
-  const prevById = new Map(prev.map((n) => [n.id, n]));
-  return built.map((node) => {
-    const existing = prevById.get(node.id);
-    if (!existing) return node;
+function editorSame(
+  a: { kerberos: string; name: string } | null,
+  b: { kerberos: string; name: string } | null,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.kerberos === b.kerberos && a.name === b.name;
+}
 
-    const builtSize = nodeWorldSize(node);
-    const existingSize = nodeWorldSize(existing);
-    if (builtSize && existingSize && sizesMatch(builtSize, existingSize)) {
-      return {
-        ...node,
-        measured: existing.measured,
-        width: existing.width,
-        height: existing.height,
-      };
-    }
+function taskDtoSame(a: TaskDto, b: TaskDto): boolean {
+  if (a === b) return true;
+  return (
+    a.id === b.id &&
+    a.planId === b.planId &&
+    a.title === b.title &&
+    a.status === b.status &&
+    a.notes === b.notes &&
+    a.deadline === b.deadline &&
+    a.effort === b.effort &&
+    a.x === b.x &&
+    a.y === b.y &&
+    a.width === b.width &&
+    a.height === b.height &&
+    assigneesEqual(a.assignees, b.assignees)
+  );
+}
 
+function frameChromeSame(a: SubPlanDto, b: SubPlanDto): boolean {
+  if (a === b) return true;
+  return (
+    a.linkId === b.linkId &&
+    a.name === b.name &&
+    a.status === b.status &&
+    rollupEqual(a.rollup, b.rollup) &&
+    assigneesEqual(a.assignees, b.assignees)
+  );
+}
+
+function flowNodeSame(built: FlowNode, existing: FlowNode): boolean {
+  if (built.type !== existing.type) return false;
+  if (
+    built.hidden !== existing.hidden ||
+    built.draggable !== existing.draggable ||
+    built.selectable !== existing.selectable ||
+    built.selected !== existing.selected ||
+    built.zIndex !== existing.zIndex ||
+    built.position.x !== existing.position.x ||
+    built.position.y !== existing.position.y
+  ) {
+    return false;
+  }
+  const builtSize = nodeWorldSize(built);
+  const existingSize = nodeWorldSize(existing);
+  if (!builtSize || !existingSize || !sizesMatch(builtSize, existingSize)) return false;
+
+  if (built.type === "task" && existing.type === "task") {
+    const a = built.data;
+    const b = existing.data;
+    return (
+      taskDtoSame(a.task, b.task) &&
+      a.scale === b.scale &&
+      pathsEqual(a.path, b.path) &&
+      a.ownerPlanId === b.ownerPlanId &&
+      a.resizable === b.resizable &&
+      a.startable === b.startable &&
+      a.focused === b.focused &&
+      a.dimmed === b.dimmed &&
+      a.onToggleFocus === b.onToggleFocus &&
+      editorSame(a.editor, b.editor)
+    );
+  }
+  if (built.type === "subPlanFrame" && existing.type === "subPlanFrame") {
+    const a = built.data;
+    const b = existing.data;
+    return (
+      frameChromeSame(a.subPlan, b.subPlan) &&
+      a.linkId === b.linkId &&
+      pathsEqual(a.path, b.path) &&
+      a.scale === b.scale &&
+      a.chromeless === b.chromeless &&
+      a.resizable === b.resizable &&
+      a.focused === b.focused &&
+      a.onToggleFocus === b.onToggleFocus &&
+      editorSame(a.editor, b.editor)
+    );
+  }
+  return false;
+}
+
+function withMeasured(node: FlowNode, existing: FlowNode | undefined): FlowNode {
+  if (!existing) return node;
+  const builtSize = nodeWorldSize(node);
+  const existingSize = nodeWorldSize(existing);
+  if (builtSize && existingSize && sizesMatch(builtSize, existingSize)) {
     return {
       ...node,
-      width: builtSize?.w,
-      height: builtSize?.h,
-      measured: undefined,
+      measured: existing.measured,
+      width: existing.width,
+      height: existing.height,
     };
+  }
+  return {
+    ...node,
+    width: builtSize?.w,
+    height: builtSize?.h,
+    measured: undefined,
+  };
+}
+
+function mergeFlowNodes(built: FlowNode[], prev: FlowNode[]): FlowNode[] {
+  if (built.length !== prev.length && prev.length === 0) return built;
+  const prevById = new Map(prev.map((n) => [n.id, n]));
+  let changed = built.length !== prev.length;
+  const next = built.map((node, i) => {
+    const existing = prevById.get(node.id);
+    if (existing && flowNodeSame(node, existing)) {
+      if (prev[i] !== existing) changed = true;
+      return existing;
+    }
+    changed = true;
+    return withMeasured(node, existing);
   });
+  return changed ? next : prev;
+}
+
+function edgeSame(a: Edge, b: Edge): boolean {
+  if (a.source !== b.source || a.target !== b.target || a.hidden !== b.hidden) return false;
+  if (a.style?.strokeWidth !== b.style?.strokeWidth) return false;
+  const am = a.markerEnd;
+  const bm = b.markerEnd;
+  if (!am || !bm || typeof am !== "object" || typeof bm !== "object") return am === bm;
+  return am.width === bm.width && am.height === bm.height;
+}
+
+function mergeFlowEdges(built: Edge[], prev: Edge[]): Edge[] {
+  if (built.length !== prev.length) return built;
+  let changed = false;
+  const prevById = new Map(prev.map((edge) => [edge.id, edge]));
+  const next = built.map((edge, i) => {
+    const existing = prevById.get(edge.id);
+    if (existing && edgeSame(existing, edge)) {
+      if (prev[i] !== existing) changed = true;
+      return existing;
+    }
+    changed = true;
+    return edge;
+  });
+  return changed ? next : prev;
 }
 
 function resolveExitSelection(
@@ -947,78 +1121,17 @@ export function PlanCanvas({
   undoRedo: UndoRedoState;
   viewerKerberos: string;
 }) {
-  const router = useRouter();
-  const reloadPendingRef = useRef(false);
-  const [canvasKey, setCanvasKey] = useState(0);
-
-  const requestGraphReload = useCallback(() => {
-    reloadPendingRef.current = true;
-    router.refresh();
-  }, [router]);
-
-  useEffect(() => {
-    if (!reloadPendingRef.current) return;
-    reloadPendingRef.current = false;
-    setCanvasKey((k) => k + 1);
-  }, [graph]);
-
   return (
     <ReactFlowProvider>
       <CanvasInner
-        key={`${graph.plan.id}-${canvasKey}`}
+        key={graph.plan.id}
         graph={graph}
         people={people}
         focusParam={focusParam ?? null}
         undoRedo={undoRedo}
         viewerKerberos={viewerKerberos}
-        requestGraphReload={requestGraphReload}
       />
     </ReactFlowProvider>
-  );
-}
-
-function PanSpeedControl({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (next: number) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-md border border-line bg-surface/90 px-2 py-1 text-xs text-ink-muted backdrop-blur">
-      <span>scroll</span>
-      <input
-        type="range"
-        min={0.1}
-        max={1.5}
-        step={0.05}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="h-1 w-20 accent-highlight"
-        aria-label="Pan scroll speed"
-      />
-    </div>
-  );
-}
-
-function StartableOnlyControl({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <label className="flex cursor-pointer items-center gap-2 rounded-md border border-line bg-surface/90 px-2 py-1 text-xs text-ink-muted backdrop-blur">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="accent-highlight"
-        aria-label="Hide blocked tasks"
-      />
-      <span>Startable only</span>
-    </label>
   );
 }
 
@@ -1028,14 +1141,12 @@ function CanvasInner({
   focusParam,
   undoRedo: initialUndoRedo,
   viewerKerberos,
-  requestGraphReload,
 }: {
   graph: PlanGraph;
   people: Person[];
   focusParam: string | null;
   undoRedo: UndoRedoState;
   viewerKerberos: string;
-  requestGraphReload: () => void;
 }) {
   const router = useRouter();
   const { screenToFlowPosition, fitView, setViewport, getViewport } = useReactFlow();
@@ -1057,8 +1168,21 @@ function CanvasInner({
   const [historyBusy, setHistoryBusy] = useState(false);
   const historyBusyRef = useRef(false);
   const [undoRedoState, setUndoRedoState] = useState<UndoRedoState>(() => initialUndoRedo);
-  const [panSpeed, setPanSpeed] = useState(readPanSpeed);
-  const [startableOnly, setStartableOnly] = useState(readStartableOnly);
+  const [settings, setSettings] = useState<CanvasSettings>(DEFAULT_CANVAS_SETTINGS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => {
+    // After mount, so the server HTML and the first client render match.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read this browser's saved settings
+    setSettings(readCanvasSettings(viewerKerberos, window.localStorage));
+  }, [viewerKerberos]);
+  const startableOnly = settings.startableOnly;
+  const updateSettings = useCallback(
+    (next: CanvasSettings) => {
+      setSettings(next);
+      writeCanvasSettings(viewerKerberos, next, window.localStorage);
+    },
+    [viewerKerberos],
+  );
   const [filters, setFilters] = useState<TaskFilters>(readStoredFilters);
   const [graphSyncTick, setGraphSyncTick] = useState(0);
   const [pendingFocusSceneIds, setPendingFocusSceneIds] = useState<Set<string> | null>(null);
@@ -1069,16 +1193,22 @@ function CanvasInner({
     clientGraphRef.current = clientGraph;
   }, [clientGraph]);
 
+  const undoRefreshTimerRef = useRef<number | null>(null);
   const onHistoryMutationSuccess = useCallback(() => {
-    setUndoRedoState({
+    setUndoRedoState((prev) => ({
+      ...prev,
       canUndo: true,
       canRedo: false,
-      undoLabel: null,
       redoLabel: null,
-    });
-    void getUndoRedo().then((result) => {
-      if (result.ok) setUndoRedoState(result.data);
-    });
+    }));
+    // The label is only for the dock; one fetch covers a burst of edits.
+    if (undoRefreshTimerRef.current !== null) window.clearTimeout(undoRefreshTimerRef.current);
+    undoRefreshTimerRef.current = window.setTimeout(() => {
+      undoRefreshTimerRef.current = null;
+      void getUndoRedo().then((result) => {
+        if (result.ok) setUndoRedoState(result.data);
+      });
+    }, 400);
   }, []);
 
   useEffect(() => {
@@ -1287,22 +1417,25 @@ function CanvasInner({
   }, [applyServerGraph]);
 
   const onPlansChanged = useCallback(
-    (planIds: string[]) => {
+    (event: ChangedEvent) => {
+      // This tab already applied its own edit. Reloading here repaints the canvas
+      // a round trip later. Other people still reload.
+      if (event.by === viewerKerberos) return;
       const shown = planIdsInGraph(clientGraphRef.current);
-      if (!planIds.some((id) => shown.has(id))) return;
-      // Bursts of saves (a multi-node drag) become one reload.
+      if (!event.planIds.some((id) => shown.has(id))) return;
       if (reloadTimerRef.current !== null) window.clearTimeout(reloadTimerRef.current);
       reloadTimerRef.current = window.setTimeout(() => {
         reloadTimerRef.current = null;
         void reloadFromServer();
       }, 150);
     },
-    [reloadFromServer],
+    [reloadFromServer, viewerKerberos],
   );
 
   useEffect(
     () => () => {
       if (reloadTimerRef.current !== null) window.clearTimeout(reloadTimerRef.current);
+      if (undoRefreshTimerRef.current !== null) window.clearTimeout(undoRefreshTimerRef.current);
     },
     [],
   );
@@ -1447,7 +1580,7 @@ function CanvasInner({
       realtime.lockedByOthers,
     );
     setNodes((prev) => mergeFlowNodes(built, prev));
-    setEdges(buildFlowEdges(renderScene, visible, focusAffine));
+    setEdges((prev) => mergeFlowEdges(buildFlowEdges(renderScene, visible, focusAffine), prev));
 
     const pending = pendingFocusTransitionRef.current;
     if (pending) {
@@ -1843,34 +1976,36 @@ function CanvasInner({
       const x = canonical.x - TASK_NODE_WIDTH / 2;
       const y = canonical.y - TASK_NODE_HEIGHT / 2;
 
+      const taskId = crypto.randomUUID();
+      const task: TaskDto = {
+        id: taskId,
+        planId: focusedPlanId,
+        title: "New task",
+        status: "todo",
+        notes: "",
+        deadline: null,
+        effort: null,
+        x,
+        y,
+        width: TASK_NODE_WIDTH,
+        height: TASK_NODE_HEIGHT,
+        assignees: [],
+      };
+      setClientGraph((g) => insertTaskIntoPlan(g, focusedPlanId, task));
+      setSelectedSceneIds(new Set([sceneTaskId(focusPath, taskId)]));
       void createTask({
         planId: focusedPlanId,
+        taskId,
         title: "New task",
         x,
         y,
       }).then((result) => {
         if (!result.ok) {
+          setClientGraph((g) => removeTaskEverywhere(g, taskId));
+          setSelectedSceneIds(new Set());
           setError(result.error);
           return;
         }
-        const task: TaskDto = {
-          id: result.data.taskId,
-          planId: focusedPlanId,
-          title: "New task",
-          status: "todo",
-          notes: "",
-          deadline: null,
-          effort: null,
-          x,
-          y,
-          width: 240,
-          height: 84,
-          assignees: [],
-        };
-        setClientGraph((g) => insertTaskIntoPlan(g, focusedPlanId, task));
-        const nextScene = flattenScene(insertTaskIntoPlan(clientGraphRef.current, focusedPlanId, task));
-        const st = nextScene.tasks.find((t) => t.taskId === task.id && pathsEqual(t.path, focusPath));
-        if (st) setSelectedSceneIds(new Set([st.sceneId]));
         onHistoryMutationSuccess();
       });
     },
@@ -1887,54 +2022,55 @@ function CanvasInner({
       const inv = invertAffine(containerAffine(clientGraphRef.current, focusPath));
       const canonical = applyAffine(world, inv);
 
+      const parentVisibility = visibilityOfPlan(clientGraphRef.current, focusedPlanId);
+      if (!parentVisibility) {
+        setError("Couldn't read the parent plan.");
+        void reloadFromServer();
+        return;
+      }
+      const childPlanId = crypto.randomUUID();
+      const planLinkId = crypto.randomUUID();
+      const subPlan: SubPlanDto = {
+        linkId: planLinkId,
+        parentPlanId: focusedPlanId,
+        childPlanId,
+        name: name.trim(),
+        description: "",
+        ownerKerberos: viewerKerberos,
+        visibility: parentVisibility,
+        x: canonical.x,
+        y: canonical.y,
+        width: 360,
+        height: 240,
+        assignees: [],
+        rollup: { total: 0, done: 0, blocked: 0, nearestDeadline: null },
+        tasks: [],
+        edges: [],
+        subPlans: [],
+        status: "todo",
+        effort: null,
+        deadline: null,
+        notes: "",
+      };
+      setClientGraph((g) => insertSubPlanIntoPlan(g, focusedPlanId, subPlan));
       void createSubPlan({
         parentPlanId: focusedPlanId,
+        childPlanId,
+        planLinkId,
         name: name.trim(),
         x: canonical.x,
         y: canonical.y,
       }).then((result) => {
         if (!result.ok) {
+          setClientGraph((g) => removeSubPlanEverywhere(g, planLinkId));
           setError(result.error);
           return;
         }
-        const parentVisibility = visibilityOfPlan(clientGraphRef.current, focusedPlanId);
-        if (!parentVisibility) {
-          setError("Couldn't read the parent plan.");
-          requestGraphReload();
-          return;
-        }
-        const subPlan: SubPlanDto = {
-          linkId: result.data.planLinkId,
-          parentPlanId: focusedPlanId,
-          childPlanId: result.data.childPlanId,
-          name: name.trim(),
-          description: "",
-          ownerKerberos: viewerKerberos,
-          visibility: parentVisibility,
-          x: canonical.x,
-          y: canonical.y,
-          width: 360,
-          height: 240,
-          assignees: [],
-          rollup: { total: 0, done: 0, blocked: 0, nearestDeadline: null },
-          tasks: [],
-          edges: [],
-          subPlans: [],
-          status: "todo",
-          effort: null,
-          deadline: null,
-          notes: "",
-        };
-        setClientGraph((g) => insertSubPlanIntoPlan(g, focusedPlanId, subPlan));
         onHistoryMutationSuccess();
       });
     },
-    [focusPath, focusedPlanId, onHistoryMutationSuccess, requestGraphReload, startableOnly, viewerKerberos],
+    [focusPath, focusedPlanId, onHistoryMutationSuccess, reloadFromServer, startableOnly, viewerKerberos],
   );
-
-  const refreshGraphFromServer = useCallback(() => {
-    requestGraphReload();
-  }, [requestGraphReload]);
 
   const handleOrganizeMove = useCallback(
     (targetPlanId: string) => {
@@ -1968,7 +2104,7 @@ function CanvasInner({
           );
         }
         onHistoryMutationSuccess();
-        refreshGraphFromServer();
+        void reloadFromServer();
       });
     },
     [
@@ -1977,7 +2113,7 @@ function CanvasInner({
       focusedPlanId,
       onHistoryMutationSuccess,
       organizeBusy,
-      refreshGraphFromServer,
+      reloadFromServer,
       startableOnly,
     ],
   );
@@ -2016,7 +2152,7 @@ function CanvasInner({
         );
       }
       onHistoryMutationSuccess();
-      refreshGraphFromServer();
+      void reloadFromServer();
     });
   }, [
     effectiveSelectedSceneIds,
@@ -2024,58 +2160,9 @@ function CanvasInner({
     focusedPlanId,
     onHistoryMutationSuccess,
     organizeBusy,
-    refreshGraphFromServer,
+    reloadFromServer,
     startableOnly,
   ]);
-
-  const saveTaskPosition = useCallback((node: TaskFlowNode) => {
-    const { task, path, ownerPlanId } = node.data;
-    const worldPos = flowToWorld(node.position, focusAffineRef.current);
-    const inv = invertAffine(containerAffine(clientGraphRef.current, path));
-    const canonical = applyAffine(worldPos, inv);
-    const prevX = task.x;
-    const prevY = task.y;
-
-    setClientGraph((g) => updateTaskPositionEverywhere(g, task.id, ownerPlanId, canonical.x, canonical.y));
-
-    void updateTaskPositions({
-      planId: ownerPlanId,
-      positions: [{ taskId: task.id, x: canonical.x, y: canonical.y }],
-    }).then((result) => {
-      if (!result.ok) {
-        setClientGraph((g) => updateTaskPositionEverywhere(g, task.id, ownerPlanId, prevX, prevY));
-        setError(result.error);
-        return;
-      }
-      onHistoryMutationSuccess();
-    });
-  }, [onHistoryMutationSuccess]);
-
-  const saveFramePosition = useCallback((node: SubPlanFrameNode) => {
-    const { linkId, path } = node.data;
-    const frame = sceneRef.current.frames.find((f) => f.linkId === linkId && pathsEqual(f.path, path));
-    if (!frame) return;
-
-    const inv = invertAffine(containerAffine(clientGraphRef.current, path));
-    const worldPos = flowToWorld(node.position, focusAffineRef.current);
-    const canonical = applyAffine(worldPos, inv);
-    const prevX = frame.subPlan.x;
-    const prevY = frame.subPlan.y;
-
-    setClientGraph((g) => updateFrameEverywhere(g, linkId, { x: canonical.x, y: canonical.y }));
-
-    void updatePlanLinkPositions({
-      planId: frame.parentPlanId,
-      positions: [{ planLinkId: linkId, x: canonical.x, y: canonical.y }],
-    }).then((result) => {
-      if (!result.ok) {
-        setClientGraph((g) => updateFrameEverywhere(g, linkId, { x: prevX, y: prevY }));
-        setError(result.error);
-        return;
-      }
-      onHistoryMutationSuccess();
-    });
-  }, [onHistoryMutationSuccess]);
 
   const onNodeDragStart = useCallback((_event: MouseEvent | TouchEvent, node: FlowNode, draggedNodes: FlowNode[]) => {
     isDraggingRef.current = true;
@@ -2103,10 +2190,132 @@ function CanvasInner({
   const onNodeDragStop = useCallback(
     (_event: MouseEvent | TouchEvent, node: FlowNode, draggedNodes: FlowNode[]) => {
       const moved = draggedNodes.length > 0 ? draggedNodes : [node];
+      const graph = clientGraphRef.current;
+      const taskMoves: {
+        taskId: string;
+        ownerPlanId: string;
+        x: number;
+        y: number;
+        prevX: number;
+        prevY: number;
+      }[] = [];
+      const frameMoves: {
+        linkId: string;
+        parentPlanId: string;
+        x: number;
+        y: number;
+        prevX: number;
+        prevY: number;
+      }[] = [];
 
       for (const n of moved) {
-        if (n.type === "task") saveTaskPosition(n);
-        else if (n.type === "subPlanFrame") saveFramePosition(n);
+        if (n.type === "task") {
+          const { task, path, ownerPlanId } = n.data;
+          const canonical = applyAffine(
+            flowToWorld(n.position, focusAffineRef.current),
+            invertAffine(containerAffine(graph, path)),
+          );
+          if (Math.abs(canonical.x - task.x) < 0.5 && Math.abs(canonical.y - task.y) < 0.5) continue;
+          taskMoves.push({
+            taskId: task.id,
+            ownerPlanId,
+            x: canonical.x,
+            y: canonical.y,
+            prevX: task.x,
+            prevY: task.y,
+          });
+        } else if (n.type === "subPlanFrame") {
+          const frame = sceneRef.current.frames.find(
+            (f) => f.linkId === n.data.linkId && pathsEqual(f.path, n.data.path),
+          );
+          if (!frame) continue;
+          const canonical = applyAffine(
+            flowToWorld(n.position, focusAffineRef.current),
+            invertAffine(containerAffine(graph, n.data.path)),
+          );
+          if (Math.abs(canonical.x - frame.subPlan.x) < 0.5 && Math.abs(canonical.y - frame.subPlan.y) < 0.5) {
+            continue;
+          }
+          frameMoves.push({
+            linkId: n.data.linkId,
+            parentPlanId: frame.parentPlanId,
+            x: canonical.x,
+            y: canonical.y,
+            prevX: frame.subPlan.x,
+            prevY: frame.subPlan.y,
+          });
+        }
+      }
+
+      if (taskMoves.length > 0 || frameMoves.length > 0) {
+        setClientGraph((g) => {
+          let next = g;
+          for (const move of taskMoves) {
+            next = updateTaskPositionEverywhere(next, move.taskId, move.ownerPlanId, move.x, move.y);
+          }
+          for (const move of frameMoves) {
+            next = updateFrameEverywhere(next, move.linkId, { x: move.x, y: move.y });
+          }
+          return next;
+        });
+      }
+
+      const tasksByPlan = new Map<string, typeof taskMoves>();
+      for (const move of taskMoves) {
+        const group = tasksByPlan.get(move.ownerPlanId) ?? [];
+        group.push(move);
+        tasksByPlan.set(move.ownerPlanId, group);
+      }
+      const framesByPlan = new Map<string, typeof frameMoves>();
+      for (const move of frameMoves) {
+        const group = framesByPlan.get(move.parentPlanId) ?? [];
+        group.push(move);
+        framesByPlan.set(move.parentPlanId, group);
+      }
+
+      const writes: Promise<boolean>[] = [];
+      for (const [planId, group] of tasksByPlan) {
+        writes.push(
+          updateTaskPositions({
+            planId,
+            positions: group.map((move) => ({ taskId: move.taskId, x: move.x, y: move.y })),
+          }).then((result) => {
+            if (result.ok) return true;
+            setClientGraph((g) => {
+              let next = g;
+              for (const move of group) {
+                next = updateTaskPositionEverywhere(next, move.taskId, move.ownerPlanId, move.prevX, move.prevY);
+              }
+              return next;
+            });
+            setError(result.error);
+            return false;
+          }),
+        );
+      }
+      for (const [planId, group] of framesByPlan) {
+        writes.push(
+          updatePlanLinkPositions({
+            planId,
+            positions: group.map((move) => ({ planLinkId: move.linkId, x: move.x, y: move.y })),
+          }).then((result) => {
+            if (result.ok) return true;
+            setClientGraph((g) => {
+              let next = g;
+              for (const move of group) {
+                next = updateFrameEverywhere(next, move.linkId, { x: move.prevX, y: move.prevY });
+              }
+              return next;
+            });
+            setError(result.error);
+            return false;
+          }),
+        );
+      }
+      if (writes.length > 0) {
+        void Promise.all(writes).then((oks) => {
+          if (oks.some(Boolean)) onHistoryMutationSuccess();
+        });
       }
 
       frameDragRef.current = null;
@@ -2118,7 +2327,7 @@ function CanvasInner({
         void reloadFromServer();
       }
     },
-    [claim, reloadFromServer, saveFramePosition, saveTaskPosition],
+    [claim, onHistoryMutationSuccess, reloadFromServer],
   );
 
   const onConnect = useCallback<OnConnect>(
@@ -2146,25 +2355,28 @@ function CanvasInner({
       const to = endpointFromNode(targetNode);
       if (!from || !to) return;
 
+      const edgeId = crypto.randomUUID();
+      const edge: EdgeDto = {
+        id: edgeId,
+        fromKind: from.kind,
+        fromId: from.id,
+        toKind: to.kind,
+        toId: to.id,
+      };
+      setClientGraph((g) => addEdgeEverywhere(g, srcOwner, edge));
       void createEdge({
         planId: srcOwner,
+        edgeId,
         fromKind: from.kind,
         fromId: from.id,
         toKind: to.kind,
         toId: to.id,
       }).then((result) => {
         if (!result.ok) {
+          setClientGraph((g) => removeEdgeEverywhere(g, edgeId));
           setError(result.error);
           return;
         }
-        const edge: EdgeDto = {
-          id: result.data.edgeId,
-          fromKind: from.kind,
-          fromId: from.id,
-          toKind: to.kind,
-          toId: to.id,
-        };
-        setClientGraph((g) => addEdgeEverywhere(g, srcOwner, edge));
         onHistoryMutationSuccess();
       });
     },
@@ -2172,6 +2384,21 @@ function CanvasInner({
   );
 
   const onNodesChange = useCallback((changes: NodeChange<FlowNode>[]) => {
+    const selected = new Map<string, boolean>();
+    for (const change of changes) {
+      if (change.type === "select") selected.set(change.id, change.selected);
+    }
+    if (selected.size > 0) {
+      setSelectedSceneIds((prev) => {
+        const next = new Set(prev);
+        for (const [id, on] of selected) {
+          if (on) next.add(id);
+          else next.delete(id);
+        }
+        if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev;
+        return next;
+      });
+    }
     setNodes((prev) => {
       const next = applyNodeChanges(changes, prev);
       const drag = frameDragRef.current;
@@ -2200,11 +2427,12 @@ function CanvasInner({
   const onPaneDoubleClick = useCallback(
     (event: React.MouseEvent) => {
       const target = event.target as HTMLElement;
+      if (!settings.doubleClickAddsTask) return;
       if (!target.classList.contains("react-flow__pane")) return;
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       addTaskAtWorld(position);
     },
-    [addTaskAtWorld, screenToFlowPosition],
+    [addTaskAtWorld, screenToFlowPosition, settings.doubleClickAddsTask],
   );
 
   const hasContent = scene.tasks.length > 0 || scene.frames.length > 0;
@@ -2237,10 +2465,15 @@ function CanvasInner({
   }, [scene.tasks, scene.frames, visible, chromeless, focusedIds]);
 
   const showFocusHint = hasFocusableContent && activeFocusCount === 0;
+  const canvasPrefs = useMemo(
+    () => ({ animateFocus: settings.animateFocus }),
+    [settings.animateFocus],
+  );
 
   return (
+    <CanvasPrefsContext.Provider value={canvasPrefs}>
     <div className="relative h-[calc(100vh-3.5rem)]" onDoubleClick={onPaneDoubleClick}>
-      <div className="absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2 rounded-lg border border-line bg-surface/90 px-4 py-2 backdrop-blur">
+      <div className="absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2">
         <Link href="/" className="text-sm text-ink-muted hover:text-ink">
           ← plans
         </Link>
@@ -2337,6 +2570,9 @@ function CanvasInner({
             Back
           </Button>
         ) : null}
+        <Button variant="ghost" aria-pressed={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}>
+          Settings
+        </Button>
       </div>
 
       {error ? (
@@ -2351,13 +2587,15 @@ function CanvasInner({
       {!hasContent ? (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <p className="text-sm text-ink-muted">
-            Double-click for a task, or use + Sub-plan to nest another plan.
+            {settings.doubleClickAddsTask
+              ? "Double-click for a task, or use + Sub-plan to nest another plan."
+              : "Use + Task, or + Sub-plan to nest another plan."}
           </p>
         </div>
       ) : null}
 
       {showFocusHint ? (
-        <div className="pointer-events-none absolute left-1/2 top-16 z-10 -translate-x-1/2 rounded-full border border-line bg-surface/80 px-3 py-1.5 text-xs text-ink-muted backdrop-blur">
+        <div className="pointer-events-none absolute left-1/2 top-16 z-10 -translate-x-1/2 rounded-full border border-line bg-surface px-3 py-1.5 text-xs text-ink-muted">
           Hover a task or sub-plan and click the target icon to make it jump out
         </div>
       ) : null}
@@ -2374,13 +2612,14 @@ function CanvasInner({
         onNodeDragStop={onNodeDragStop}
         onNodeClick={(event, node) => {
           const nodePath = node.type === "task" || node.type === "subPlanFrame" ? node.data.path : [];
+          const additive = settings.selectModifier === "shift" ? event.shiftKey : event.metaKey || event.ctrlKey;
           if (node.type === "subPlanFrame" && node.data.chromeless) return;
           if (!pathsEqual(nodePath, focusPath)) {
-            if (!event.shiftKey) setSelectedSceneIds(new Set());
+            if (!additive) setSelectedSceneIds(new Set());
             return;
           }
 
-          if (event.shiftKey) {
+          if (additive) {
             setSelectedSceneIds((prev) => {
               const next = new Set(prev);
               if (next.has(node.id)) next.delete(node.id);
@@ -2401,7 +2640,7 @@ function CanvasInner({
           setSelectedSceneIds(new Set());
         }}
         onEdgeDoubleClick={(_event, edge) => {
-          if (!window.confirm("Remove this dependency?")) return;
+          if (settings.confirmDeleteEdge && !window.confirm("Remove this dependency?")) return;
           const edgeId = edge.data?.edgeId as string | undefined;
           if (!edgeId) return;
           void deleteEdge(edgeId).then((result) => {
@@ -2415,37 +2654,40 @@ function CanvasInner({
         }}
         deleteKeyCode={null}
         zoomOnDoubleClick={false}
-        panOnScroll
-        panOnScrollSpeed={panSpeed}
-        panOnScrollMode={PanOnScrollMode.Free}
-        zoomOnScroll={false}
+        panOnScroll={settings.scrollAction === "pan"}
+        panOnScrollSpeed={panScrollSpeed(settings)}
+        panOnScrollMode={
+          settings.scrollAxis === "horizontal"
+            ? PanOnScrollMode.Horizontal
+            : settings.scrollAxis === "vertical"
+              ? PanOnScrollMode.Vertical
+              : PanOnScrollMode.Free
+        }
+        zoomOnScroll={settings.scrollAction === "zoom"}
         zoomOnPinch
-        panOnDrag
+        panOnDrag={settings.dragEmpty === "pan"}
+        selectionOnDrag={settings.dragEmpty === "select"}
+        selectionMode={settings.selectionBox === "partial" ? SelectionMode.Partial : SelectionMode.Full}
+        multiSelectionKeyCode={settings.selectModifier === "shift" ? "Shift" : ["Meta", "Control"]}
+        autoPanOnNodeDrag={settings.autoPan}
+        autoPanOnConnect={settings.autoPan}
+        autoPanSpeed={settings.autoPanSpeed}
+        connectionRadius={settings.connectionRadius}
+        snapToGrid={settings.snapToGrid}
+        snapGrid={[settings.gridSize, settings.gridSize]}
         fitView={false}
         fitViewOptions={{ padding: 0.2 }}
         minZoom={MIN_ZOOM}
         maxZoom={maxZoom}
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#2e2833" />
-        <Controls position="bottom-left" showInteractive={false} />
-        <div className="absolute bottom-4 left-14 z-10 flex flex-wrap items-end gap-2">
-          <div className="flex flex-col gap-2">
-            <PanSpeedControl
-              value={panSpeed}
-              onChange={(next) => {
-                setPanSpeed(next);
-                window.localStorage.setItem(PAN_SPEED_KEY, String(next));
-              }}
-            />
-            <StartableOnlyControl
-              checked={startableOnly}
-              onChange={(next) => {
-                setStartableOnly(next);
-                window.localStorage.setItem(STARTABLE_ONLY_KEY, String(next));
-              }}
-            />
-          </div>
+        {settings.showDots ? (
+          <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#2e2833" />
+        ) : null}
+        {settings.showZoomControls ? <Controls position="bottom-left" showInteractive={false} /> : null}
+        <div
+          className={`absolute bottom-4 z-10 flex flex-wrap items-end gap-2 ${settings.showZoomControls ? "left-14" : "left-4"}`}
+        >
           <FilterBar
             filters={filters}
             people={people}
@@ -2457,18 +2699,20 @@ function CanvasInner({
             }}
           />
         </div>
-        <MiniMap
-          position="bottom-right"
-          pannable
-          zoomable
-          nodeColor={(node) => {
-            if (node.type === "subPlanFrame") return "var(--color-highlight)";
-            const t = (node as TaskFlowNode).data?.task;
-            return t ? `var(--color-status-${t.status})` : "var(--color-line)";
-          }}
-          maskColor="rgba(13, 11, 14, 0.7)"
-          bgColor="var(--color-surface)"
-        />
+        {settings.showMinimap ? (
+          <MiniMap
+            position="bottom-right"
+            pannable
+            zoomable
+            nodeColor={(node) => {
+              if (node.type === "subPlanFrame") return "var(--color-highlight)";
+              const t = (node as TaskFlowNode).data?.task;
+              return t ? `var(--color-status-${t.status})` : "var(--color-line)";
+            }}
+            maskColor="rgba(13, 11, 14, 0.7)"
+            bgColor="var(--color-surface)"
+          />
+        ) : null}
       </ReactFlow>
       </PlanCanvasActionsContext.Provider>
 
@@ -2510,10 +2754,21 @@ function CanvasInner({
         />
       ) : null}
 
-      <p className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 text-xs text-ink-muted">
-        scroll: pan · pinch: zoom · double-click: task · double-click sub-plan: enter · back: breadcrumb · ⌘Z
-        undo · ⌘⇧Z redo
+      <p className="pointer-events-none absolute bottom-4 left-1/2 z-10 max-w-[70%] -translate-x-1/2 text-center text-xs text-ink-muted">
+        {interactionHint(settings)}
       </p>
+      {settingsOpen ? (
+        <CanvasSettingsPanel settings={settings} onChange={updateSettings} onClose={() => setSettingsOpen(false)} />
+      ) : null}
     </div>
+    </CanvasPrefsContext.Provider>
   );
+}
+
+function interactionHint(settings: CanvasSettings): string {
+  const scroll = settings.scrollAction === "pan" ? "scroll: pan" : "scroll: zoom";
+  const drag = settings.dragEmpty === "pan" ? "drag empty: pan" : "drag empty: select · space: pan";
+  const add = settings.doubleClickAddsTask ? "double-click empty: task · " : "";
+  const select = settings.selectModifier === "shift" ? "shift-click: add" : "⌘-click: add";
+  return `${scroll} · pinch: zoom · ${drag} · ${add}double-click sub-plan: enter · ${select} · ⌘Z undo`;
 }

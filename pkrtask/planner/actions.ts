@@ -287,6 +287,8 @@ export async function updatePlanMeta(
 
 const createTaskSchema = z.object({
   planId: z.uuid(),
+  /** Set by the canvas so the card can appear before this round trip finishes. */
+  taskId: z.uuid().optional(),
   title: z.string().trim().min(1, "Task title is required.").max(300),
   x: z.number().finite(),
   y: z.number().finite(),
@@ -301,7 +303,16 @@ export async function createTask(
     await requirePlanAccess(parsed.planId, viewer, "write");
     let taskId = "";
     await recordPlanHistory(viewer, parsed.planId, "Create task", async () => {
-      const [task] = await db.insert(tasks).values(parsed).returning({ id: tasks.id });
+      const [task] = await db
+        .insert(tasks)
+        .values({
+          planId: parsed.planId,
+          title: parsed.title,
+          x: parsed.x,
+          y: parsed.y,
+          ...(parsed.taskId ? { id: parsed.taskId } : {}),
+        })
+        .returning({ id: tasks.id });
       if (!task) throw new Error("Task insert returned no row.");
       taskId = task.id;
     });
@@ -513,6 +524,8 @@ export async function deleteTask(taskId: string): Promise<ActionResult> {
 const createEdgeSchema = z
   .object({
     planId: z.uuid(),
+    /** Set by the canvas so the arrow can appear before this round trip finishes. */
+    edgeId: z.uuid().optional(),
     fromKind: z.enum(GRAPH_NODE_KINDS),
     fromId: z.uuid(),
     toKind: z.enum(GRAPH_NODE_KINDS),
@@ -587,6 +600,7 @@ export async function createEdge(
       const [edge] = await db
         .insert(edges)
         .values({
+          ...(parsed.edgeId ? { id: parsed.edgeId } : {}),
           planId: parsed.planId,
           fromKind: parsed.fromKind,
           fromId: parsed.fromId,
@@ -629,6 +643,9 @@ export async function deleteEdge(edgeId: string): Promise<ActionResult> {
 
 const createSubPlanSchema = z.object({
   parentPlanId: z.uuid(),
+  /** Set by the canvas so the frame can appear before this round trip finishes. */
+  childPlanId: z.uuid().optional(),
+  planLinkId: z.uuid().optional(),
   name: z.string().trim().min(1, "Sub-plan name is required.").max(200),
   x: z.number().finite(),
   y: z.number().finite(),
@@ -649,6 +666,7 @@ export async function createSubPlan(
       const [child] = await db
         .insert(plans)
         .values({
+          ...(parsed.childPlanId ? { id: parsed.childPlanId } : {}),
           name: parsed.name,
           ownerKerberos: viewer.kerberos,
           visibility: parent.visibility,
@@ -660,6 +678,7 @@ export async function createSubPlan(
       const [link] = await db
         .insert(planLinks)
         .values({
+          ...(parsed.planLinkId ? { id: parsed.planLinkId } : {}),
           parentPlanId: parsed.parentPlanId,
           childPlanId: child.id,
           x: parsed.x,
