@@ -7,6 +7,7 @@ export const ROSTER: readonly { kerberos: string; name: string }[] = [
   { kerberos: "angela_h", name: "Angela Ho" },
   { kerberos: "barrazae", name: "Eduardo Barraza" },
   { kerberos: "bcostin", name: "Bobby Costin" },
+  { kerberos: "jobraeel", name: "Jacob Jobraeel" },
   { kerberos: "julianwu", name: "Julian Wu" },
   { kerberos: "lzsims", name: "Landon Sims" },
   { kerberos: "mgao7", name: "Michelle Gao" },
